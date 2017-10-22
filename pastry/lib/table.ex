@@ -5,7 +5,7 @@ defmodule Pastry.Table do
     Starts the node. 
     : node_id (string)
     """
-    def start_link(node_id) do
+    def start_link(node_id_str, node_id_int, self_pid, b) do
         GenServer.start_link(__MODULE__, [:ok, node_id_str, node_id_int, self_pid, b], [])
     end
 
@@ -31,8 +31,8 @@ defmodule Pastry.Table do
     """
     def update_leaf(pid, sourcenode_leaf_routing_map) do
         source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node") 
-        leaf_list = Map.get(leaf_routing_map, "leaf")
-        rout_dict = Map.get(leaf_routing_map, "routing") 
+        leaf_list = Map.get(sourcenode_leaf_routing_map, "leaf")
+        rout_dict = Map.get(sourcenode_leaf_routing_map, "routing") 
         insert_leaf(pid, source_node_tuple)
         if length(leaf_list) != nil do
             Enum.map(leaf_list, fn x -> insert_leaf(pid, x) end)
@@ -55,8 +55,8 @@ defmodule Pastry.Table do
         end
     end
 
-    def get_self_node_str() do
-        GenServer.cast(pid, {:get_self_node_str)
+    def get_self_node_str(pid) do
+        GenServer.cast(pid, {:get_self_node_str})
     end
 
     def get_next_from_leaf(pid, target_node_str) do
@@ -75,6 +75,10 @@ defmodule Pastry.Table do
         GenServer.call(pid, {:get_self_table})
     end
 
+    def get_send_counter(pid) do
+        GenServer.call(pid, {:get_send_counter})
+    end
+
     ## Server Callbacks
     def init([:ok, node_id_str, node_id_int, self_node_pid, b]) do
         tmp = :math.pow(2, b) |> round
@@ -82,20 +86,20 @@ defmodule Pastry.Table do
         m = 2 * tmp
         num_routing_col = tmp
         num_routing_row = l # :math.log(num_nodes) / :math.log(tmp)
-        state = %{"node_id_str" => node_id, "node_id_int" => node_id_int, , "self_node_pid" => self_pid, "leaf" => %{"small" => [], "large" => []} , 
+        state = %{"node_id_str" => node_id_str, "node_id_int" => node_id_int, "self_node_pid" => self_node_pid, "leaf" => %{"small" => [], "large" => []} , 
         "routing" => {}, "neighbor" => [], "leaf_size" => l, "routing_size" => [num_routing_row, num_routing_col], 
-        "neighbor_size" => m, "time_stamp" => nil, "num_send" => 0, "send_counter" => 0}
+        "neighbor_size" => m, "time_stamp" => nil, "num_recv" => 0, "send_counter" => 0}
         {:ok, state}
     end
-    
-    defp insert_routing(insert_node_tuple, self_node_id_str, routing_dict, , num_routing_col) do
+
+    defp insert_routing(insert_node_tuple, self_node_id_str, routing_dict, num_routing_col) do
         insert_node_id_str = elem(insert_node_tuple, 0)
         length_shared_prefix = Pastry.Utilies.shl(self_node_id_str, insert_node_id_str, 0)
-        
+
         {common_prefix, rest} = String.split_at(insert_node_id_str, length_shared_prefix)
         {next_digit, rest} = String.split_at(rest, 1)
         next_digit = Integer.parse(next_digit)
-        
+
         case Map.has_key?(routing_dict, length_shared_prefix) do
             true ->
                 # Routing dict has already stored the key and list
@@ -108,10 +112,10 @@ defmodule Pastry.Table do
                 end
                 new_row = List.replace_at(target_routing_row, next_digit, node_id_tuple)
             false ->
-                # Create a new row in the routing map with length_shared_prefix as key    
+                # Create a new row in the routing map with length_shared_prefix as key
                 new_row = Enum.flat_map(1..num_routing_col, fn x -> [nil] end)
                 new_row = List.replace_at(new_row, next_digit, insert_node_tuple)
-            Map.update(routing_dict, length_shared_prefix, new_row, &(&1=new_row))    
+            Map.update(routing_dict, length_shared_prefix, new_row, &(&1=new_row))
         end
         routing_dict
     end
@@ -125,9 +129,9 @@ defmodule Pastry.Table do
         self_node_id_str = Map.get(state, "node_id_str")
         self_node_id_int = Map.get(state, "node_id_int")
         leaf_set = Map.get(state, "leaf")
-        
+
         case node_id_int <= self_node_id_int do
-            true -> 
+            true ->
                 leaf_flag = "small"
             false ->
                 leaf_flag = "large"
@@ -140,11 +144,12 @@ defmodule Pastry.Table do
             # sorting according to the node_id_int
             side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))  
             leaf_set = Map.update!(leaf_set, leaf_flag, fn x -> side_leaf_set end)
-            state = Map.update!(state, "leaf", fn x -> leaf_set)
+            state = Map.update!(state, "leaf", fn x -> leaf_set end)
         else
             # the leaf set is full
             [num_routing_row, num_routing_col] = Map.get(state, "routing_size") 
             routing_dict = Map.get(state, "routing")
+            pop_node_tuple = nil
             if elem(List.first(side_leaf_set), 1) < node_id_int && node_id_int < elem(List.last(side_leaf_set), 1) do
                 # node_id is within range of side leaf set
                 side_leaf_set = [node_tuple] ++ side_leaf_set
@@ -156,7 +161,7 @@ defmodule Pastry.Table do
                         {pop_node_tuple, side_leaf_set} = List.pop_at(side_leaf_set, -1)
                 end
                 leaf_set = Map.update!(leaf_set, leaf_flag, fn x -> side_leaf_set end)
-                state = Map.update!(state, "leaf", fn x -> leaf_set)
+                state = Map.update!(state, "leaf", fn x -> leaf_set end)
                 # insert the pop_value into the routing table
                 self_node_str = Map.get(state, "node_id_str")
                 routing_dict = Pastry.Table.insert_routing(pop_node_tuple, self_node_str, routing_dict)
@@ -164,7 +169,7 @@ defmodule Pastry.Table do
                 # node_id is not within range of side leaf set
                 routing_dict = Pastry.Table.insert_routing(pop_node_tuple, routing_dict)
             end
-            state = Map.update(state, "routing", fn x -> routing_dict)
+            state = Map.update(state, "routing", fn x -> routing_dict end)
         end
         {:noreply, state}
     end
@@ -177,7 +182,7 @@ defmodule Pastry.Table do
         if diff > 0 do
             Pastry.Utilies.pop_list(neighbor_list, diff)
         end     
-        state = Map.update(state, "neighbor", fn x -> neighbor_list)
+        state = Map.update(state, "neighbor", fn x -> neighbor_list end)
         {:noreply, state}
     end
 
@@ -190,9 +195,9 @@ defmodule Pastry.Table do
     def check_same_pattern(tuple_list, target_node_str) do
         if length(tuple_list) > 0 do
             {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
-            case elem(temp_tuple, 0) == target_node_str do
+            case elem(first_tuple, 0) == target_node_str do
                 true -> 
-                    temp_tuple
+                    first_tuple
                 false ->
                     check_same_pattern(rest_tuple_list, target_node_str)
             end
@@ -250,4 +255,6 @@ defmodule Pastry.Table do
         msg = Map.merge(msg,self_node_map)
         {:reply, msg}
     end
+
+    def 
 end

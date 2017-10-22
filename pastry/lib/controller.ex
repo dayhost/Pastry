@@ -3,10 +3,10 @@ defmodule Pastry.Controller do
         {:ok, node_status} = Pastry.ControllerStatus.start_link()
         arg_b = 4
         Enum.map(
-            1,...,max_node_num,
+            1..max_node_num,
             fn(x) ->
                 prox_node = Pastry.ControllerStatus.get_random_node(node_status)
-                {:ok, pid} = spawn_link(fn -> Pastry.Node.init(prox_node, x, arg_b, send_count, node_status) end)
+                pid = spawn_link(fn -> Pastry.Node.init(prox_node, x, arg_b, send_count, node_status) end)
                 Pastry.ControllerStatus.add_node(node_status, pid)
             end
         )
@@ -21,7 +21,7 @@ defmodule Pastry.Controller do
                 Pastry.ControllerStatus.remove_node(node_pid)
             else
                 destID = :random.uniform(max_node_num)
-                destID = Pastry.Utilies.get_node_id(destID)
+                destID = Pastry.Utilies.get_node_id(destID, arg_b)
                 send(node_pid, {:normal, {destID, "hello", -1}})
                 Pastry.ControllerStatus.add_msg_counter(node_status)
             end
@@ -66,7 +66,7 @@ defmodule Pastry.ControllerStatus do
 
     # callback function
     def init(:ok) do
-        {:ok, %{"nodes"=>[], "total_hop"=>0, "total_msg"=>0}
+        {:ok, %{"nodes"=>[], "total_hop"=>0, "total_msg"=>0}}
     end
 
     def handle_call({:get_random_node}, _from, status) do
@@ -80,25 +80,25 @@ defmodule Pastry.ControllerStatus do
             end
             {rand_node, node_list} = List.pop_at(node_list, random_number)
         else
-            rand_node = :no_node
+            rand_node = nil
         end
         {:reply, rand_node, status}
     end
 
     def handle_cast({:add_node, node}, status) do
-        {:noreply, Map.update(status, "nodes", &(List.insert_at(&1, -1, node)))}
+        {:noreply, Map.update!(status, "nodes", &(List.insert_at(&1, -1, node)))}
     end
 
     def handle_cast({:remove_node, node}, status) do
-        {:noreply, Map.update(status, "nodes", &(List.delete(&1, node))}
+        {:noreply, Map.update!(status, "nodes", &(List.delete(&1, node)))}
     end
 
     def handle_cast({:add_msg_counter}, status) do
-        {:noreply, Map.update(status, "total_msg", &(&1+1)}
+        {:noreply, Map.update!(status, "total_msg", &(&1+1))}
     end
 
     def handle_cast({:add_hop_counter, hop_num}, status) do
-        {:noreply, Map.update(status, "total_hop", &(&1+hop_num))}
+        {:noreply, Map.update!(status, "total_hop", &(&1+hop_num))}
     end
 
     def handle_call({:get_avg_hop}, _from, status) do

@@ -7,8 +7,8 @@ defmodule Pastry.Node do
         IO.puts "get an empty node and start to init"
         # start to get routing info
         # send start to send init info
-        if (prox_node!=:no_node) do
-            Pastry.Table.update_neighbor(server_pid, %{"neighbor"=>[(self_pid, node_num, prox_node)])
+        if (prox_node!=nil) do
+            #Pastry.Table.update_neighbor( server_pid, %{ "neighbor" => [(self_id, node_num, prox_node)]} )
             send(prox_node, {:init, {self_id, self(), 0}})
         end
         #start to recieve table from nodes
@@ -26,7 +26,7 @@ defmodule Pastry.Node do
                 if (Pastry.Utilies.node_id_diff(self_id, destID)<2) do
                     IO.puts ":init message get the destination"
                 else
-                    {:ok, next_node_address} = route_logic(destID, server_pid)
+                    {:ok, next_node_address} = route_logic(destID, server_pid, self_id)
                     send(next_node_address, {:init, {destID, new_node_pid, hop_num+1}})
                 end
                 send(next_node_address, {:update, {self_table, self_id, hop_num}})
@@ -42,21 +42,19 @@ defmodule Pastry.Node do
             {:join, {new_table}} ->
                 # update its table
                 update_leaf(server_pid, new_table)
-                if hop_num == 1 do
-                    update_neighbor(server_pid, new_table)
-                end
+                update_neighbor(server_pid, new_table)
             {:normal, {destID, msg, hop_num}} ->
                 # get normal(forward) message from other node
                 # check if it want to terminate
-                send_count = Pastry.Table.get_send_count`er(server_pid)
+                send_count = Pastry.Table.get_send_counter(server_pid)
                 if(send_count<send_num) do
                     self_id = get_self_node_id(server_pid)
                     if (self_id==destID) do
                         IO.puts ":nromal message get the destination"
                         # return num of hop used in send msg
-                        Pastry.ControllerStatus.add_msg_counter(msg_aggr_server, hop)
+                        Pastry.ControllerStatus.add_msg_counter(msg_aggr_server, hop_num)
                     else
-                        {:ok, next_node_address} = route_logic(destID, server_pid)
+                        {:ok, next_node_address} = route_logic(destID, server_pid, self_id)
                         send(next_node_address, {:normal, {destID, msg, hop_num+1}})
                         Pastry.Table.set_send_counter(server_pid, send_count+1)
                     end
@@ -65,10 +63,10 @@ defmodule Pastry.Node do
                     Process.exit(self())
                 end
         end
-        receive_data(server_pid, arg_b)
+        receive_data(server_pid, arg_b, send_num, msg_aggr_server)
     end
 
-    def route_logic(destID, server_pid) do
+    def route_logic(destID, server_pid, self_id) do
         next_node_address = Pastry.Table.get_next_from_leaf(server_pid, destID)
         com_len = Pastry.Utilies.shl(self_id, destID, 0)
         if (next_node_address==nil) do
@@ -115,7 +113,7 @@ defmodule Pastry.Node do
     end
 
     defp check_cretria(server_pid, arg_b) do
-        counter = Pastry.Table.get_counter(server_pid)
+        counter = Pastry.Table.get_recv_counter(server_pid)
         thresdhold = :math.log2(arg_b)
         flag = false
         if(counter>thresdhold) do

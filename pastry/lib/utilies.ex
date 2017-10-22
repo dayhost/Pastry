@@ -9,6 +9,7 @@ defmodule Pastry.Utilies do
     defp add_prefix(id) do
         if String.length(id)<8 do
             id = "0"<>id
+            add_prefix(id)
         else
             id
         end
