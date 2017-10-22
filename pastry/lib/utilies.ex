@@ -68,4 +68,15 @@ defmodule Pastry.Utilies do
             sum
         end
     end
+
+    def pop_list(current_list, diff) do
+        if diff > 0 do
+            list_size = length(current_list)
+            random_number = :rand.uniform(list_size) - 1
+            {_, current_list} = List.pop_at(current_list, random_number)
+            pop_list(current_list, diff-1)
+        else
+            current_list
+        end   
+    end
 end
