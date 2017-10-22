@@ -14,14 +14,14 @@ defmodule Pastry.Utilies do
         end
     end
 
-    defp convert_num_to_based_str(base, prefix, rem) do
+    defp convert_num_to_based_str(base, suffix, rem) do
         if(Kernel.div(rem, base)==0) do
-            prefix<>Integer.to_string(rem)
+            Integer.to_string(rem)<>suffix
         else
             result = Kernel.div(rem, base)
             rem = Kernel.rem(rem, base)
-            prefix = prefix<>Integer.to_string(rem)
-            convert_num_to_based_str(base, prefix, result)
+            suffix = Integer.to_string(rem)<>suffix
+            convert_num_to_based_str(base, suffix, result)
         end
     end
 
@@ -42,5 +42,30 @@ defmodule Pastry.Utilies do
     def flat_routing_table(routing_dict) do
         routing_list = Map.values(routing_dict)
         Enum.flat_map(routing_list, fn x -> x end)
+    end
+
+    def node_id_diff(id1, id2, arg_b) do
+        num1 = id_to_number(id1, arg_b)
+        num2 = id_to_number(id2, arg_b)
+        Kernel.abs(num1-num2)
+    end
+
+    def id_to_number(id, arg_b) do
+        re_id = String.reverse(id)
+        base = Kernel.round(:math.pow(2, arg_b))
+        id_length = String.length(id)
+        get_num_from_str(re_id, base, id_length, 0)
+    end
+
+    defp get_num_from_str(re_id, base, id_length, sum) do
+        if(String.length(re_id)!=0) do
+            pos = id_length - String.length(re_id)
+            {char_at, re_id} = String.next_grapheme(re_id)
+            num_at = String.to_integer(char_at)
+            sum = sum + num_at * Kernel.round(:math.pow(base, pos))
+            get_num_from_str(re_id, base, id_length, sum)
+        else
+            sum
+        end
     end
 end

@@ -9,7 +9,7 @@ defmodule Pastry.Node do
         # send start to send init info
         if (prox_node!=:no_node) do
             Pastry.Table.update_neighbor(server_pid, %{"neighbor"=>[prox_node])
-            send(prox_node, {:init, {prox_node, self_id, 0}})
+            send(prox_node, {:init, {self_id, self(), 0}})
         end
         #start to recieve table from nodes
         receive_data(server_pid, arg_b, send_num)
@@ -21,10 +21,14 @@ defmodule Pastry.Node do
             {:init, {destID, new_node_pid, hop_num}} ->
                 # get init message from other node
                 # message {:init, {destID, new_node_pid, hop_num}}
-                {:ok, next_node_address} = route_logic(destID, server_pid)
-                self_table = get_self_table(server_pid)
                 self_id = get_self_node_id(server_pid)
-                send(next_node_address, {:init, {destID, new_node_pid, hop_num+1}})
+                self_table = get_self_table(server_pid)
+                if (Pastry.Utilies.node_id_diff(self_id, destID)<2) do
+                    IO.puts ":init message get the destination"
+                else
+                    {:ok, next_node_address} = route_logic(destID, server_pid)
+                    send(next_node_address, {:init, {destID, new_node_pid, hop_num+1}})
+                end
                 send(next_node_address, {:update, {self_table, self_id, hop_num}})
             {:update, {new_table, sourceID, hop_num}} ->
                 # get update table from old node
@@ -46,9 +50,14 @@ defmodule Pastry.Node do
                 # check if it want to terminate
                 send_count = Pastry.Table.get_send_counter(server_pid)
                 if(send_count<send_num) do
-                    {:ok, next_node_address} = route_logic(destID)
-                    send(next_node_address, {:normal, {destID, msg, hop_num+1}})
-                    Pastry.Table.set_send_counter(server_pid, send_count+1)
+                    self_id = get_self_node_id(server_pid)
+                    if (self_id==destID) do
+                        IO.puts ":nromal message get the destination"
+                    else
+                        {:ok, next_node_address} = route_logic(destID, server_pid)
+                        send(next_node_address, {:normal, {destID, msg, hop_num+1}})
+                        Pastry.Table.set_send_counter(server_pid, send_count+1)
+                    end
                 else
                     IO.puts "=========#{Kernel.inspect(self())} stoped ==========="
                     Process.exit(self())
@@ -95,7 +104,8 @@ defmodule Pastry.Node do
     def send_table_to_all_neighbor(server_pid, arg_b) do
         if check_cretria(server_pid, arg_b) do
             self_table = get_self_table(server_pid)
-            send_table_map(Map.get(self_table, "routing"), self_table)
+            routing_list = Pastry.Utilies.flat_routing_table(Map.get(self_table, "routing"))
+            send_table_list(routing_list, self_table)
             send_table_list(Map.get(self_table, "leaf"), self_table)
             send_table_list(Map.get(self_table, "neighbor"), self_table)
         end
@@ -118,20 +128,6 @@ defmodule Pastry.Node do
             end
         end
         flag
-    end
-
-    defp send_table_map(map, self_table) do
-        Enum.each(
-            map,
-            fn(key, value) ->
-                Enum.map(
-                    value,
-                    fn(x) ->
-                        send(x, {:join, {self_table}})
-                    end
-                )
-            end
-        )
     end
 
     defp send_table_list(list, self_table) do
