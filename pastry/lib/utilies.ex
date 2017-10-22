@@ -38,4 +38,9 @@ defmodule Pastry.Utilies do
         end
         match_predix - 1
     end
+
+    def flat_routing_table(routing_dict) do
+        routing_list = Map.values(routing_dict)
+        Enum.flat_map(routing_list, fn x -> x end)
+    end
 end
