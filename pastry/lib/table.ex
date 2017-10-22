@@ -79,6 +79,26 @@ defmodule Pastry.Table do
         GenServer.call(pid, {:get_send_counter})
     end
 
+    def set_recv_counter(pid, recv_num) do
+        GenServer.cast(pid, {:set_recv_counter, recv_num})
+    end
+
+    def get_recv_counter(pid) do
+        GenServer.call(pid, {:get_recv_counter})
+    end
+
+    def set_send_counter(pid, send_num) do
+        GenServer.cast(pid, {:set_send_counter, send_num})
+    end
+
+    def get_time_stamp(pid) do
+        GenServer.call(pid, {:get_time_stamp})
+    end
+
+    def set_time_stamp(pid, time_stamp) do
+        GenServer.cast(pid, {:set_time_stamp, time_stamp})
+    end
+
     ## Server Callbacks
     def init([:ok, node_id_str, node_id_int, self_node_pid, b]) do
         tmp = :math.pow(2, b) |> round
@@ -88,7 +108,7 @@ defmodule Pastry.Table do
         num_routing_row = l # :math.log(num_nodes) / :math.log(tmp)
         state = %{"node_id_str" => node_id_str, "node_id_int" => node_id_int, "self_node_pid" => self_node_pid, "leaf" => %{"small" => [], "large" => []} , 
         "routing" => {}, "neighbor" => [], "leaf_size" => l, "routing_size" => [num_routing_row, num_routing_col], 
-        "neighbor_size" => m, "time_stamp" => nil, "num_recv" => 0, "send_counter" => 0}
+        "neighbor_size" => m, "time_stamp" => nil, "recv_counter" => 0, "send_counter" => 0}
         {:ok, state}
     end
 
@@ -189,7 +209,7 @@ defmodule Pastry.Table do
     def handle_call({:get_next_from_leaf, target_node_str}, _from, state) do
         leaf_list = Map.get(state, "leaf")
         matched_dest = check_same_pattern(leaf_list, target_node_str)
-        {:reply, matched_dest}
+        {:reply, matched_dest, state}
     end
 
     def check_same_pattern(tuple_list, target_node_str) do
@@ -218,7 +238,7 @@ defmodule Pastry.Table do
             false ->
                 matched_dest = nil
         end
-        {:reply, matched_dest}
+        {:reply, matched_dest, state}
     end
 
     def handle_call({:get_next_from_all, target_node_str, common_length}, _from, state) do
@@ -253,8 +273,34 @@ defmodule Pastry.Table do
         fetch_keys = ["leaf", "routing", "neighbor"]
         msg = Map.take(state, fetch_keys)
         msg = Map.merge(msg,self_node_map)
-        {:reply, msg}
+        {:reply, msg, state}
     end
 
-    def 
+    def handle_call({:get_recv_counter}, _from, state) do      
+        {:reply, Map.get(state, "recv_counter"), state}
+    end
+
+    def handle_call({:get_send_counter}, _from, state) do
+        {:reply, Map.get(state, "send_counter"), state}
+    end
+
+    def handle_call({:get_time_stamp}, _from, state) do
+        {:reply, Map.get(state, "time_stamp"), state}
+    end
+
+    def handle_cast({:set_recv_counter, recv_num}) do
+        state = Map.update!(state, "recv_counter", &(&1=recv_num))
+        {:noreply, state}
+    end
+
+    def handle_cast({:set_send_counter, send_num}) do
+        state = Map.update!(state, "send_counter", &(&1=send_num))
+        {:noreply, state}
+    end
+
+    def handle_cast({:set_time_stamp, time_stamp}) do
+        state = Map.update!(state, "time_stamp", &(&1=time_stamp))
+        {:noreply, state}
+    end
+
 end
