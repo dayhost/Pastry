@@ -85,6 +85,7 @@ defmodule Pastry.Node do
         result_table = %{}
         result_table = Map.put_new(result_table, "leaf", Map.get(table, "leaf"))
         result_table = Map.put_new(result_table, "routing", Map.get(table, "routing"))
+        result_table = Map.put_new(result_table, "source_node", Map.get(table, "source_node"))
         Pastry.Table.update_leaf(server_pid, result_table)
         update_neighbor(server_pid, table)
     end
