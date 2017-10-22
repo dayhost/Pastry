@@ -70,13 +70,13 @@ defmodule Pastry.Node do
 
     def route_logic(destID, server_pid) do
         next_node_address = Pastry.Table.get_next_from_leaf(server_pid, destID)
+        com_len = Pastry.Utilies.shl(self_id, destID, 0)
         if (next_node_address==nil) do
             self_id = get_self_node_id(server_pid)
-            com_len = Pastry.Utilies.shl(self_id, destID, 0)
             next_node_address = Pastry.Table.get_next_from_routing(server_pid, destID, com_len)
         end
         if (next_node_address==nil) do
-            next_node_address = Pastry.Table.get_next_from_all(server_pid, destID)
+            next_node_address = Pastry.Table.get_next_from_all(server_pid, destID, com_len)
         end
         next_node_address
     end
