@@ -21,7 +21,7 @@ defmodule Pastry.Node do
             {:init, {destID, new_node_pid, hop_num}} ->
                 # get init message from other node
                 # message {:init, {destID, new_node_pid, hop_num}}
-                self_id = get_self_node_id(server_pid)
+                self_id = get_self_node_str(server_pid)
                 self_table = get_self_table(server_pid)
                 if (Pastry.Utilies.node_id_diff(self_id, destID)<2) do
                     IO.puts ":init message get the destination"
@@ -48,15 +48,15 @@ defmodule Pastry.Node do
                 # check if it want to terminate
                 send_count = Pastry.Table.get_send_counter(server_pid)
                 if(send_count<send_num) do
-                    self_id = get_self_node_id(server_pid)
+                    self_id = get_self_node_str(server_pid)
                     if (self_id==destID) do
                         IO.puts ":nromal message get the destination"
                         # return num of hop used in send msg
-                        Pastry.ControllerStatus.add_msg_counter(msg_aggr_server, hop_num)
+                        Pastry.ControllerStatus.add_hop_counter(msg_aggr_server, hop_num)
                     else
                         {:ok, next_node_address} = route_logic(destID, server_pid, self_id)
                         send(next_node_address, {:normal, {destID, msg, hop_num+1}})
-                        Pastry.Table.set_send_counter(server_pid, send_count+1)
+                        Pastry.Table.add_send_counter(server_pid)
                     end
                 else
                     IO.puts "=========#{Kernel.inspect(self())} stoped ==========="
@@ -70,7 +70,7 @@ defmodule Pastry.Node do
         next_node_address = Pastry.Table.get_next_from_leaf(server_pid, destID)
         com_len = Pastry.Utilies.shl(self_id, destID, 0)
         if (next_node_address==nil) do
-            self_id = get_self_node_id(server_pid)
+            self_id = get_self_node_str(server_pid)
             next_node_address = Pastry.Table.get_next_from_routing(server_pid, destID, com_len)
         end
         if (next_node_address==nil) do
@@ -98,8 +98,8 @@ defmodule Pastry.Node do
         Pastry.Table.get_self_table(server_pid)
     end
 
-    def get_self_node_id(server_pid) do
-        Pastry.Table.get_self_node_id(server_pid)
+    def get_self_node_str(server_pid) do
+        Pastry.Table.get_self_node_str(server_pid)
     end
 
     def send_table_to_all_neighbor(server_pid, arg_b) do
@@ -114,10 +114,13 @@ defmodule Pastry.Node do
 
     defp check_cretria(server_pid, arg_b) do
         counter = Pastry.Table.get_recv_counter(server_pid)
+        Pastry.Table.set_recv_counter(server_pid, counter + 1)
         thresdhold = :math.log2(arg_b)
         flag = false
         if(counter>thresdhold) do
             flag = true
+            Pastry.Table.set_recv_counter(server_pid, 0)
+            Pastry.Table.set_timestamp(server_pid, nil)
         end
         timer = Pastry.Table.get_timestamp(server_pid)
         if(timer!=nil)do
@@ -126,6 +129,8 @@ defmodule Pastry.Node do
             now = System.system_time(:millisecond)
             if ((now-timer)/1000>5) do
                 flag = true
+                Pastry.Table.set_recv_counter(server_pid, 0)
+                Pastry.Table.set_timestamp(server_pid, nil)
             end
         end
         flag

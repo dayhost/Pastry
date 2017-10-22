@@ -56,7 +56,7 @@ defmodule Pastry.Table do
     end
 
     def get_self_node_str(pid) do
-        GenServer.cast(pid, {:get_self_node_str})
+        GenServer.call(pid, {:get_self_node_str})
     end
 
     def get_next_from_leaf(pid, target_node_str) do
@@ -71,7 +71,7 @@ defmodule Pastry.Table do
         Genserver.call(pid, {:get_next_from_all, target_node_str, common_length})
     end
 
-    def get_selt_table(pid) do
+    def get_self_table(pid) do
         GenServer.call(pid, {:get_self_table})
     end
 
@@ -288,17 +288,17 @@ defmodule Pastry.Table do
         {:reply, Map.get(state, "time_stamp"), state}
     end
 
-    def handle_cast({:set_recv_counter, recv_num}) do
+    def handle_cast({:set_recv_counter, recv_num}, state) do
         state = Map.update!(state, "recv_counter", &(&1=recv_num))
         {:noreply, state}
     end
 
-    def handle_cast({:set_send_counter, send_num}) do
+    def handle_cast({:set_send_counter, send_num}, state) do
         state = Map.update!(state, "send_counter", &(&1=send_num))
         {:noreply, state}
     end
 
-    def handle_cast({:set_time_stamp, time_stamp}) do
+    def handle_cast({:set_time_stamp, time_stamp}, state) do
         state = Map.update!(state, "time_stamp", &(&1=time_stamp))
         {:noreply, state}
     end
