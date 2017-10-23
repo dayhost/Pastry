@@ -207,8 +207,16 @@ defmodule Pastry.Table do
     end
 
     def handle_call({:get_next_from_leaf, target_node_str}, _from, state) do
-        leaf_list = Map.get(state, "leaf")
-        matched_dest = check_same_pattern(leaf_list, target_node_str)
+        leaf_map = Map.get(state, "leaf")
+        target_node_int = Pastry.Utilies.id_to_number(target_node_str)
+        self_node_id_int = Map.get(state, "node_id_int")
+        matched_dest = 
+            case target_node_int < self_node_id_int do
+                true ->
+                    check_same_pattern(Map.get(leaf_map, "small"), target_node_str)
+                false ->
+                    check_same_pattern(Map.get(leaf_map, "large"), target_node_str)
+            end
         {:reply, matched_dest, state}
     end
 
