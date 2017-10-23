@@ -173,9 +173,9 @@ defmodule Pastry.Table do
             # the leaf set is full
             [num_routing_row, num_routing_col] = Map.get(state, "routing_size")
             routing_dict = Map.get(state, "routing")
-            pop_node_tuple = nil
             if elem(List.first(side_leaf_set), 1) < node_id_int && node_id_int < elem(List.last(side_leaf_set), 1) do
                 # node_id is within range of side leaf set
+                pop_node_tuple = nil
                 side_leaf_set = [node_tuple] ++ side_leaf_set
                 side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))
                 case leaf_flag do
@@ -188,10 +188,11 @@ defmodule Pastry.Table do
                 state = Map.update!(state, "leaf", fn x -> leaf_set end)
                 # insert the pop_value into the routing table
                 self_node_str = Map.get(state, "node_id_str")
-                routing_dict = Pastry.Table.insert_routing(pop_node_tuple, self_node_str, routing_dict)
+                routing_dict = Pastry.Table.insert_routing(pop_node_tuple, self_node_str, routing_dict, num_routing_col)
             else
                 # node_id is not within range of side leaf set
-                routing_dict = Pastry.Table.insert_routing(pop_node_tuple, routing_dict)
+                self_node_str = Map.get(state, "node_id_str")
+                routing_dict = Pastry.Table.insert_routing(node_tuple, self_node_str, routing_dict, num_routing_col)
             end
             state = Map.update!(state, "routing", fn x -> routing_dict end)
         end
