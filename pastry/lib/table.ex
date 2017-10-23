@@ -108,7 +108,7 @@ defmodule Pastry.Table do
         num_routing_row = l # :math.log(num_nodes) / :math.log(tmp)
         state = %{"node_id_str" => node_id_str, "node_id_int" => node_id_int, "self_node_pid" => self_node_pid, "leaf" => %{"small" => [], "large" => []} , 
         "routing" => {}, "neighbor" => [], "leaf_size" => l, "routing_size" => [num_routing_row, num_routing_col], 
-        "neighbor_size" => m, "time_stamp" => nil, "recv_counter" => 0, "send_counter" => 0}
+        "neighbor_size" => m, "time_stamp" => nil, "recv_counter" => 0,"send_counter" => 0, "arg_b" => b}
         {:ok, state}
     end
 
@@ -208,7 +208,7 @@ defmodule Pastry.Table do
 
     def handle_call({:get_next_from_leaf, target_node_str}, _from, state) do
         leaf_map = Map.get(state, "leaf")
-        target_node_int = Pastry.Utilies.id_to_number(target_node_str)
+        target_node_int = Pastry.Utilies.id_to_number(target_node_str, Map.get(state, "arg_b"))
         self_node_id_int = Map.get(state, "node_id_int")
         matched_dest = 
             case target_node_int < self_node_id_int do
@@ -251,7 +251,7 @@ defmodule Pastry.Table do
 
     def handle_call({:get_next_from_all, target_node_str, common_length}, _from, state) do
         all_list = Map.values(Map.get(state, "leaf")) ++ Map.values(Map.get(state, "routing")) ++ Map.get(state, "neighbor")
-        target_node_int = Pastry.Utilies.id_to_number(target_node_str)      
+        target_node_int = Pastry.Utilies.id_to_number(target_node_str, Map.get(state, "arg_b"))      
         self_node_int = Map.get(state, "self_node_int")
         matched_dest = find_closest_in_all(all_list, self_node_int, target_node_str, target_node_int, common_length)
         {:reply, matched_dest}
