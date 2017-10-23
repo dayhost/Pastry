@@ -32,7 +32,7 @@ defmodule Pastry.Table do
     def update_leaf(pid, sourcenode_leaf_routing_map) do
         source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node")
         leaf_map = Map.get(sourcenode_leaf_routing_map, "leaf")
-        rout_dict = Map.get(sourcenode_leaf_routing_map, "routing")
+        rout_map = Map.get(sourcenode_leaf_routing_map, "routing")
         insert_leaf(pid, source_node_tuple)
         
         leaf_list = Pastry.Utilies.flat_nested_dict(leaf_map)
@@ -40,9 +40,12 @@ defmodule Pastry.Table do
         if length(leaf_list) != 0 do
             Enum.map(leaf_list, fn x -> insert_leaf(pid, x) end)
         end
-
-        rout_list = Map.values(rout_dict)
+        
+        rout_list = Pastry.Utilies.flat_nested_dict(rout_map)
+        IO.puts "++++++++++#{inspect(rout_list)}"
         if length(rout_list) != 0 do
+            rout_list = List.delete(Enum.uniq(rout_list), nil)
+            IO.puts "rout_list: #{inspect(rout_list)}"
             Enum.map(rout_list, fn x -> insert_leaf(pid, x) end)
         end
     end
@@ -105,7 +108,7 @@ defmodule Pastry.Table do
     ## Server Callbacks
     def init([:ok, node_id_str, node_id_int, self_node_pid, b]) do
         tmp = :math.pow(2, b) |> round
-        l = tmp
+        l = 2 #tmp
         m = 2 * tmp
         num_routing_col = tmp
         num_routing_row = l # :math.log(num_nodes) / :math.log(tmp)
@@ -122,25 +125,27 @@ defmodule Pastry.Table do
         {common_prefix, rest} = String.split_at(insert_node_id_str, length_shared_prefix)
         {next_digit, rest} = String.split_at(rest, 1)
         {next_digit, _} = Integer.parse(next_digit)
-
-        case Map.has_key?(routing_dict, length_shared_prefix) do
-            true ->
-                # Routing dict has already stored the key and list
-                target_routing_row = Map.get(routing_dict, length_shared_prefix)
-                target_routing_col = Enum.at(target_routing_row, next_digit)
-                if target_routing_col != nil do
-                    # Already store value with the same next digit
-                    poped_routing_tuple = target_routing_col
-                    # TODO: insert the poped_routing_item into neighbor set
-                end
-                IO.puts "+++Next digit: #{inspect(next_digit)}"
-                new_row = List.replace_at(target_routing_row, next_digit, insert_node_tuple)
-            false ->
-                # Create a new row in the routing map with length_shared_prefix as key
-                new_row = Enum.flat_map(1..num_routing_col, fn x -> [nil] end)
-                new_row = List.replace_at(new_row, next_digit, insert_node_tuple)
-            Map.update(routing_dict, length_shared_prefix, new_row, &(&1=new_row))
-        end
+        routing_dict = 
+            case Map.has_key?(routing_dict, length_shared_prefix) do
+                true ->
+                    # Routing dict has already stored the key and list
+                    target_routing_row = Map.get(routing_dict, length_shared_prefix)
+                    target_routing_col = Enum.at(target_routing_row, next_digit)
+                    if target_routing_col != nil do
+                        # Already store value with the same next digit
+                        poped_routing_tuple = target_routing_col
+                        # TODO: insert the poped_routing_item into neighbor set
+                    end
+                    IO.puts "+++Next digit: #{inspect(next_digit)}"
+                    new_row = List.replace_at(target_routing_row, next_digit, insert_node_tuple)
+                    Map.update(routing_dict, length_shared_prefix, new_row, &(&1=new_row))
+                false ->
+                    # Create a new row in the routing map with length_shared_prefix as key
+                    new_row = Enum.flat_map(1..num_routing_col, fn x -> [nil] end)
+                    new_row = List.replace_at(new_row, next_digit, insert_node_tuple)
+                    Map.update(routing_dict, length_shared_prefix, new_row, &(&1=new_row))
+            end
+        # IO.puts "Routing_dict ,#{inspect(routing_dict)}"
         routing_dict
     end
 
@@ -149,7 +154,7 @@ defmodule Pastry.Table do
     end
 
     def handle_cast({:insert_leaf, node_tuple}, state) do
-        # IO.puts inspect(node_tuple)
+        IO.puts "Node_tuple: #{inspect(node_tuple)}"
         {node_id_str, node_id_int, node_pid} = node_tuple
         self_node_id_str = Map.get(state, "node_id_str")
         self_node_id_int = Map.get(state, "node_id_int")
@@ -170,6 +175,7 @@ defmodule Pastry.Table do
                 [num_routing_row, num_routing_col] = Map.get(state, "routing_size")
                 routing_dict = Map.get(state, "routing")
                 routing_dict = Pastry.Table.insert_routing(node_tuple, self_node_str, routing_dict, num_routing_col)
+                # IO.puts "routing dict: #{inspect(routing_dict)}"
                 state = Map.update!(state, "routing", fn x -> routing_dict end)
             false ->
                 # Leaf set does not have the insert node
@@ -261,17 +267,6 @@ defmodule Pastry.Table do
 
     def find_closest_pattern(tuple_list, target_node_int) do
         Enum.min_by(tuple_list, fn (x) -> Pastry.Table.compare_tuple(x, target_node_int) end)
-        # if length(tuple_list) > 0 do
-        #     {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
-        #     case elem(first_tuple, 0) == target_node_str do
-        #         true ->
-        #             first_tuple
-        #         false ->
-        #             check_same_pattern(rest_tuple_list, target_node_str)
-        #     end
-        # else
-        #     nil
-        # end
     end
 
     def handle_call({:get_next_from_routing, target_node_str, common_length}, _from, state) do
@@ -282,7 +277,7 @@ defmodule Pastry.Table do
                 routing_row = Map.get(routing_map, common_length)
                 {common_prefix, rest} = String.split_at(target_node_str, common_length)
                 {next_digit, rest} = String.split_at(rest, 1)
-                next_digit = Integer.parse(next_digit)
+                {next_digit, _} = Integer.parse(next_digit)
                 matched_dest = Enum.at(routing_row, next_digit)
             false ->
                 matched_dest = nil

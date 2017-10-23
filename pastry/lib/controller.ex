@@ -10,7 +10,7 @@ defmodule Pastry.Controller do
                 pid = spawn_link(fn -> Pastry.Node.init(prox_node_tuple, x, self_id, arg_b, send_count, node_status) end)
                 self_node_tuple = {self_id, x, pid}
                 Pastry.ControllerStatus.add_node(node_status, self_node_tuple)
-                :timer.sleep(1000)
+                # :timer.sleep(1000)
             end
         )
         :timer.sleep(5000)

@@ -40,7 +40,7 @@ defmodule Pastry.Node do
                     next_node_address = route_logic(destID, server_pid, self_id)
                     send(elem(next_node_address, 2), {:init, {destID, new_node_pid, hop_num+1}})
                 end
-                #IO.puts "#{inspect(self())}: #{inspect(Pastry.Table.get_self_table(server_pid))}========"
+                IO.puts "#{inspect(self())}: #{inspect(Pastry.Table.get_self_table(server_pid))}========"
                 send(new_node_pid, {:update, {self_table, self_id, hop_num}})
             {:update, {new_table, sourceID, hop_num}} ->
                 # get update table from old node
