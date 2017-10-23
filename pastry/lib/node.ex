@@ -8,7 +8,7 @@ defmodule Pastry.Node do
         # start to get routing info
         # send start to send init info
         if (prox_node!=nil) do
-            #Pastry.Table.update_neighbor( server_pid, %{ "neighbor" => [(self_id, node_num, prox_node)]} )
+            Pastry.Table.update_neighbor(server_pid, %{"neighbor" => [(self_id, node_num, prox_node)]})
             send(prox_node, {:init, {self_id, self(), 0}})
         end
         #start to recieve table from nodes

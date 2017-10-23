@@ -68,7 +68,7 @@ defmodule Pastry.Table do
     end
 
     def get_next_from_all(pid, target_node_str, common_length) do
-        Genserver.call(pid, {:get_next_from_all, target_node_str, common_length})
+        GenServer.call(pid, {:get_next_from_all, target_node_str, common_length})
     end
 
     def get_self_table(pid) do
@@ -107,7 +107,7 @@ defmodule Pastry.Table do
         num_routing_col = tmp
         num_routing_row = l # :math.log(num_nodes) / :math.log(tmp)
         state = %{"node_id_str" => node_id_str, "node_id_int" => node_id_int, "self_node_pid" => self_node_pid, "leaf" => %{"small" => [], "large" => []} , 
-        "routing" => {}, "neighbor" => [], "leaf_size" => l, "routing_size" => [num_routing_row, num_routing_col], 
+        "routing" => %{}, "neighbor" => [], "leaf_size" => l, "routing_size" => [num_routing_row, num_routing_col], 
         "neighbor_size" => m, "time_stamp" => nil, "recv_counter" => 0,"send_counter" => 0, "arg_b" => b}
         {:ok, state}
     end
@@ -236,7 +236,6 @@ defmodule Pastry.Table do
 
     def handle_call({:get_next_from_routing, target_node_str, common_length}, _from, state) do
         routing_map = Map.get(state, "routing")
-        IO.puts common_length
         IO.puts inspect(routing_map)
         case Map.has_key?(routing_map, common_length) do
             true ->
@@ -260,6 +259,7 @@ defmodule Pastry.Table do
     end
 
     def find_closest_in_all(tuple_list, self_node_int, target_node_str, target_node_int, common_length) do
+        IO.puts "yes"
         if length(tuple_list) > 1 do
             {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
             common_length_td = Pastry.Utilies.shl(elem(first_tuple, 0), target_node_str, 0)
