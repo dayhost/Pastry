@@ -36,8 +36,9 @@ defmodule Pastry.Utilies do
         prefix = String.slice(template, 0, match_predix)
         if String.starts_with?(target, prefix) do
             shl(template, target, match_predix+1)
-        end
-        match_predix - 1
+        else
+            match_predix - 1
+        end 
     end
 
     def flat_routing_table(routing_dict) do

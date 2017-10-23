@@ -236,6 +236,8 @@ defmodule Pastry.Table do
 
     def handle_call({:get_next_from_routing, target_node_str, common_length}, _from, state) do
         routing_map = Map.get(state, "routing")
+        IO.puts common_length
+        IO.puts inspect(routing_map)
         case Map.has_key?(routing_map, common_length) do
             true ->
                 routing_row = Map.get(routing_map, common_length)
