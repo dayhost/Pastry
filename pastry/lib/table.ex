@@ -111,7 +111,7 @@ defmodule Pastry.Table do
         num_routing_row = l # :math.log(num_nodes) / :math.log(tmp)
         state = %{"node_id_str" => node_id_str, "node_id_int" => node_id_int, "self_node_pid" => self_node_pid, "leaf" => %{"small" => [], "large" => []} , 
         "routing" => %{}, "neighbor" => [], "leaf_size" => l, "routing_size" => [num_routing_row, num_routing_col], 
-        "neighbor_size" => m, "time_stamp" => nil, "recv_counter" => 0,"send_counter" => 0, "arg_b" => b}
+        "neighbor_size" => m, "time_stamp" => 0, "recv_counter" => 0,"send_counter" => 0, "arg_b" => b}
         {:ok, state}
     end
 

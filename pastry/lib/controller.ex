@@ -5,7 +5,7 @@ defmodule Pastry.Controller do
         Enum.map(
             1..max_node_num,
             fn(x) ->
-                prox_node_tuple = Pastry.ControllerStatus.get_random_node(node_status)
+                prox_node_tuple = Pastry.ControllerStatus.get_random_prox_node(node_status)
                 self_id = Pastry.Utilies.get_node_id(x, arg_b)
                 pid = spawn_link(fn -> Pastry.Node.init(prox_node_tuple, x, self_id, arg_b, send_count, node_status) end)
                 self_node_tuple = {self_id, x, pid}
@@ -19,21 +19,37 @@ defmodule Pastry.Controller do
 
     def random_send_msg(node_status, max_node_num, arg_b) do
         :timer.sleep(1000)
-        node_tuple = Pastry.ControllerStatus.get_random_node(node_status)
-        if node_tuple != nil do
-            if Process.alive?(elem(node_tuple,2))==false do
-                Pastry.ControllerStatus.remove_node(node_status, node_tuple)
-            else
-                destID = :random.uniform(max_node_num)
-                destID = Pastry.Utilies.get_node_id(destID, arg_b)
-                send(elem(node_tuple,2), {:normal, {destID, "hello", 0}})
-                Pastry.ControllerStatus.add_msg_counter(node_status)
-            end
-            random_send_msg(node_status, max_node_num, arg_b)
-        else
+        {send_node_tuple, recv_node_tuple} = Pastry.ControllerStatus.get_random_node_pair(node_status)
+        if(Kernel.is_nil(send_node_tuple)||Kernel.is_nil(recv_node_tuple)) do
             avg_hop = Pastry.ControllerStatus.get_avg_hop(node_status)
             IO.puts "avg hop of the network is #{avg_hop}"
+        else
+            if(Process.alive?(elem(send_node_tuple,2))==false)do
+                Pastry.ControllerStatus.remove_node(node_status, send_node_tuple)
+            else
+                if(Process.alive?(elem(recv_node_tuple,2))==false) do
+                    Pastry.ControllerStatus.remove_node(node_status, recv_node_tuple)
+                else
+                    send(elem(send_node_tuple,2), {:normal, {elem(recv_node_tuple, 0), "hello", 0}})
+                end
+            end
+            random_send_msg(node_status, max_node_num, arg_b)
         end
+        # node_tuple = Pastry.ControllerStatus.get_random_recv_node(node_status, dest_int)
+        # if node_tuple != nil do
+        #     if Process.alive?(elem(node_tuple,2))==false do
+        #         Pastry.ControllerStatus.remove_node(node_status, node_tuple)
+        #     else
+        #         dest_int = :random.uniform(max_node_num)
+        #         destID = Pastry.Utilies.get_node_id(dest_int, arg_b)
+        #         send(elem(node_tuple,2), {:normal, {destID, "hello", 1}})
+        #         Pastry.ControllerStatus.add_msg_counter(node_status)
+        #     end
+        #     random_send_msg(node_status, max_node_num, arg_b)
+        # else
+        #     avg_hop = Pastry.ControllerStatus.get_avg_hop(node_status)
+        #     IO.puts "avg hop of the network is #{avg_hop}"
+        # end
     end
 end
 
@@ -48,8 +64,12 @@ defmodule Pastry.ControllerStatus do
         GenServer.cast(server, {:add_node, node_tuple})
     end
 
-    def get_random_node(server) do
-        GenServer.call(server, {:get_random_node})
+    def get_random_prox_node(server) do
+        GenServer.call(server, {:get_random_prox_node})
+    end
+
+    def get_random_node_pair(server)do
+        GenServer.call(server, {:get_random_node_pair})
     end
 
     def remove_node(server, node_tuple) do
@@ -73,20 +93,28 @@ defmodule Pastry.ControllerStatus do
         {:ok, %{"node_tuples"=>[], "total_hop"=>0, "total_msg"=>0}}
     end
 
-    def handle_call({:get_random_node}, _from, status) do
+    def handle_call({:get_random_prox_node}, _from, status) do
         node_tuple_list = Map.get(status, "node_tuples")
         len = length(node_tuple_list)
         if len>0 do
-            if len>1 do
-                random_number = :rand.uniform(len) - 1
-            else
-                random_number = 0
-            end
+            random_number = :rand.uniform(len) - 1
             {rand_node_tuple, node_list} = List.pop_at(node_tuple_list, random_number)
         else
             rand_node_tuple = nil
         end
         {:reply, rand_node_tuple, status}
+    end
+
+    def handle_call({:get_random_node_pair}, _from, status) do
+        node_tuple_list = Map.get(status, "node_tuples")
+        send_node_tuple = nil
+        recv_node_tuple = nil
+        len = length(node_tuple_list)
+        if len>1 do
+            {send_node_tuple, rest_list} = List.pop_at(node_tuple_list, :rand.uniform(len) - 1)
+            {recv_node_tuple, rest_list} = List.pop_at(rest_list, :rand.uniform(length(rest_list)) - 1)
+        end
+        {:reply, {send_node_tuple, recv_node_tuple}, status}
     end
 
     def handle_cast({:add_node, node_tuple}, status) do
