@@ -1,18 +1,20 @@
 defmodule Pastry.Node do
-    def init(prox_node, node_num, arg_b, send_num, msg_aggr_server) do
-        #start init
-        self_id = Pastry.Utilies.get_node_id(node_num, arg_b)
+    def init(prox_node_tuple, node_num, self_id, arg_b, send_num, msg_aggr_server) do
         # create its own db
         {:ok, server_pid} = Pastry.Table.start_link(self_id, node_num, self(), arg_b)
-        IO.puts "get an empty node and start to init"
+        IO.puts "get an empty node and start to init and prox is #{inspect(prox_node_tuple)}"
         # start to get routing info
         # send start to send init info
-        if (prox_node!=nil) do
-            Pastry.Table.update_neighbor(server_pid, %{"neighbor" => [(self_id, node_num, prox_node)]})
-            send(prox_node, {:init, {self_id, self(), 0}})
+        if (prox_node_tuple==nil) do
+            #start to recieve table from nodes
+            receive_data(server_pid, arg_b, send_num, msg_aggr_server)
+        else
+            Pastry.Table.update_neighbor(server_pid, %{"neighbor" => [prox_node_tuple]})
+            send(Kernel.elem(prox_node_tuple, 2), {:init, {self_id, self(), 0}})
+            IO.puts "send message to #{inspect(prox_node_tuple)}"
+            #start to recieve table from nodes
+            receive_data(server_pid, arg_b, send_num, msg_aggr_server)
         end
-        #start to recieve table from nodes
-        receive_data(server_pid, arg_b, send_num, msg_aggr_server)
     end
 
     # loop and wait for data, if get data spwan a worker to process route logic
@@ -21,15 +23,20 @@ defmodule Pastry.Node do
             {:init, {destID, new_node_pid, hop_num}} ->
                 # get init message from other node
                 # message {:init, {destID, new_node_pid, hop_num}}
+                IO.puts "get an INIT message ============="
                 self_id = get_self_node_str(server_pid)
                 self_table = get_self_table(server_pid)
-                if (Pastry.Utilies.node_id_diff(self_id, destID)<2) do
+                if (Pastry.Utilies.node_id_diff(self_id, destID, arg_b)<2) do
                     IO.puts ":init message get the destination"
                 else
+                    if(hop_num == 0) do
+                        node_id_int = Pastry.Utilies.id_to_number(destID, arg_b)
+                        Pastry.Table.update_neighbor(server_pid,%{"neighbor"=>{destID, node_id_int, new_node_pid}})
+                    end
                     {:ok, next_node_address} = route_logic(destID, server_pid, self_id)
                     send(next_node_address, {:init, {destID, new_node_pid, hop_num+1}})
                 end
-                send(next_node_address, {:update, {self_table, self_id, hop_num}})
+                send(new_node_pid, {:update, {self_table, self_id, hop_num}})
             {:update, {new_table, sourceID, hop_num}} ->
                 # get update table from old node
                 # message {:update, {%{table}, sourceID, hop_num}}
@@ -38,7 +45,8 @@ defmodule Pastry.Node do
                     update_neighbor(server_pid, new_table)
                 end
                 # this will triggle with condition
-                send_table_to_all_neighbor(server_pid, arg_b)
+                #send_table_to_all_neighbor(server_pid, arg_b)
+                set_timer_for_send(server_pid, arg_b)
             {:join, {new_table}} ->
                 # update its table
                 update_leaf(server_pid, new_table)
@@ -103,38 +111,46 @@ defmodule Pastry.Node do
     end
 
     def send_table_to_all_neighbor(server_pid, arg_b) do
-        if check_cretria(server_pid, arg_b) do
-            self_table = get_self_table(server_pid)
-            routing_list = Pastry.Utilies.flat_routing_table(Map.get(self_table, "routing"))
-            send_table_list(routing_list, self_table)
-            send_table_list(Map.get(self_table, "leaf"), self_table)
-            send_table_list(Map.get(self_table, "neighbor"), self_table)
+        #if check_cretria(server_pid, arg_b) do
+        self_table = get_self_table(server_pid)
+        routing_list = Pastry.Utilies.flat_routing_table(Map.get(self_table, "routing"))
+        send_table_list(routing_list, self_table)
+        send_table_list(Map.get(self_table, "leaf"), self_table)
+        send_table_list(Map.get(self_table, "neighbor"), self_table)
+        #end
+    end
+
+    def set_timer_for_send(server_pid, arg_b) do
+        timer = Pastry.Table.get_timestamp(server_pid)
+        if (timer!=nil) do
+            Pastry.Table.set_timestamp(server_pid, System.system_time(:millisecond))
+            :timer.apply_after(1000, Pastry.Node, Pastry.Node.send_table_to_all_neighbor, [server_pid, arg_b])
         end
     end
 
-    defp check_cretria(server_pid, arg_b) do
-        counter = Pastry.Table.get_recv_counter(server_pid)
-        Pastry.Table.set_recv_counter(server_pid, counter + 1)
-        thresdhold = :math.log2(arg_b)
-        flag = false
-        if(counter>thresdhold) do
-            flag = true
-            Pastry.Table.set_recv_counter(server_pid, 0)
-            Pastry.Table.set_timestamp(server_pid, nil)
-        end
-        timer = Pastry.Table.get_timestamp(server_pid)
-        if(timer!=nil)do
-            Pastry.Table.set_timestamp(server_pid, System.system_time(:millisecond))
-        else
-            now = System.system_time(:millisecond)
-            if ((now-timer)/1000>5) do
-                flag = true
-                Pastry.Table.set_recv_counter(server_pid, 0)
-                Pastry.Table.set_timestamp(server_pid, nil)
-            end
-        end
-        flag
-    end
+    # defp check_cretria(server_pid, arg_b) do
+    #     counter = Pastry.Table.get_recv_counter(server_pid)
+    #     Pastry.Table.set_recv_counter(server_pid, counter + 1)
+    #     thresdhold = :math.log2(arg_b)
+    #     flag = false
+    #     if(counter>thresdhold) do
+    #         flag = true
+    #         Pastry.Table.set_recv_counter(server_pid, 0)
+    #         Pastry.Table.set_timestamp(server_pid, nil)
+    #     end
+    #     timer = Pastry.Table.get_timestamp(server_pid)
+    #     if(timer!=nil)do
+    #         Pastry.Table.set_timestamp(server_pid, System.system_time(:millisecond))
+    #     else
+    #         now = System.system_time(:millisecond)
+    #         if ((now-timer)/1000>5) do
+    #             flag = true
+    #             Pastry.Table.set_recv_counter(server_pid, 0)
+    #             Pastry.Table.set_timestamp(server_pid, nil)
+    #         end
+    #     end
+    #     flag
+    # end
 
     defp send_table_list(list, self_table) do
         Enum.map(

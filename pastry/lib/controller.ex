@@ -5,24 +5,28 @@ defmodule Pastry.Controller do
         Enum.map(
             1..max_node_num,
             fn(x) ->
-                prox_node = Pastry.ControllerStatus.get_random_node(node_status)
-                pid = spawn_link(fn -> Pastry.Node.init(prox_node, x, arg_b, send_count, node_status) end)
-                Pastry.ControllerStatus.add_node(node_status, pid)
+                prox_node_tuple = Pastry.ControllerStatus.get_random_node(node_status)
+                self_id = Pastry.Utilies.get_node_id(x, arg_b)
+                pid = spawn_link(fn -> Pastry.Node.init(prox_node_tuple, x, self_id, arg_b, send_count, node_status) end)
+                self_node_tuple = {self_id, x, pid}
+                Pastry.ControllerStatus.add_node(node_status, self_node_tuple)
+                :timer.sleep(1000)
             end
         )
+        :timer.sleep(5000)
         random_send_msg(node_status, max_node_num, arg_b)
     end
 
     def random_send_msg(node_status, max_node_num, arg_b) do
         :timer.sleep(1000)
-        node_pid = Pastry.ControllerStatus.get_random_node(node_status)
-        if node_pid != :no_node do
-            if Process.alive?(node_pid)==false do
-                Pastry.ControllerStatus.remove_node(node_pid)
+        node_tuple = Pastry.ControllerStatus.get_random_node(node_status)
+        if node_tuple != nil do
+            if Process.alive?(elem(node_tuple,2))==false do
+                Pastry.ControllerStatus.remove_node(node_tuple)
             else
                 destID = :random.uniform(max_node_num)
                 destID = Pastry.Utilies.get_node_id(destID, arg_b)
-                send(node_pid, {:normal, {destID, "hello", -1}})
+                send(elem(node_tuple,2), {:normal, {destID, "hello", -1}})
                 Pastry.ControllerStatus.add_msg_counter(node_status)
             end
             random_send_msg(node_status, max_node_num, arg_b)
@@ -40,16 +44,16 @@ defmodule Pastry.ControllerStatus do
     end
 
     # user API
-    def add_node(server, node) do
-        GenServer.cast(server, {:add_node, node})
+    def add_node(server, node_tuple) do
+        GenServer.cast(server, {:add_node, node_tuple})
     end
 
     def get_random_node(server) do
         GenServer.call(server, {:get_random_node})
     end
 
-    def remove_node(server, node) do
-        GenServer.cast(server, {:remove_node, node})
+    def remove_node(server, node_tuple) do
+        GenServer.cast(server, {:remove_node, node_tuple})
     end
 
     def add_msg_counter(server) do
@@ -66,31 +70,31 @@ defmodule Pastry.ControllerStatus do
 
     # callback function
     def init(:ok) do
-        {:ok, %{"nodes"=>[], "total_hop"=>0, "total_msg"=>0}}
+        {:ok, %{"node_tuples"=>[], "total_hop"=>0, "total_msg"=>0}}
     end
 
     def handle_call({:get_random_node}, _from, status) do
-        node_list = Map.get(status, "nodes")
-        len = length(node_list)
+        node_tuple_list = Map.get(status, "node_tuples")
+        len = length(node_tuple_list)
         if len>0 do
             if len>1 do
                 random_number = :rand.uniform(len) - 1
             else
                 random_number = 0
             end
-            {rand_node, node_list} = List.pop_at(node_list, random_number)
+            {rand_node_tuple, node_list} = List.pop_at(node_tuple_list, random_number)
         else
-            rand_node = nil
+            rand_node_tuple = nil
         end
-        {:reply, rand_node, status}
+        {:reply, rand_node_tuple, status}
     end
 
-    def handle_cast({:add_node, node}, status) do
-        {:noreply, Map.update!(status, "nodes", &(List.insert_at(&1, -1, node)))}
+    def handle_cast({:add_node, node_tuple}, status) do
+        {:noreply, Map.update!(status, "node_tuples", &(List.insert_at(&1, -1, node_tuple)))}
     end
 
-    def handle_cast({:remove_node, node}, status) do
-        {:noreply, Map.update!(status, "nodes", &(List.delete(&1, node)))}
+    def handle_cast({:remove_node, node_tuple}, status) do
+        {:noreply, Map.update!(status, "node_tuples", &(List.delete(&1, node_tuple)))}
     end
 
     def handle_cast({:add_msg_counter}, status) do

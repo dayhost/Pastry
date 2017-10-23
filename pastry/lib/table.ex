@@ -1,8 +1,8 @@
 defmodule Pastry.Table do
     use GenServer, restart: :transient
-    
+
     @doc """
-    Starts the node. 
+    Starts the node.
     : node_id (string)
     """
     def start_link(node_id_str, node_id_int, self_pid, b) do
@@ -12,7 +12,7 @@ defmodule Pastry.Table do
     @doc """
     Insert the node id in the leaf and routing table.
     : node_tuple (node_id_str, node_id_int, node_pid)
-    """ 
+    """
     def insert_leaf(pid, node_tuple) do
         GenServer.cast(pid, {:insert_leaf, node_tuple})
     end
@@ -21,8 +21,8 @@ defmodule Pastry.Table do
     Insert the node id in the neighbor set
     : insert_neighbor_list: a list consists of node_tuple (node_id_str, node_id_int, node_pid)
     """
-    def insert_neightbor(pid, insert_neighbor_list) do
-        GenServer.cast(pid, {:insert_neightbor, insert_neighbor_list})
+    def insert_neighbor(pid, insert_neighbor_list) do
+        GenServer.cast(pid, {:insert_neighbor, insert_neighbor_list})
     end
 
     @doc """
@@ -30,9 +30,9 @@ defmodule Pastry.Table do
     : sourcenode_leaf_routing_map (map)
     """
     def update_leaf(pid, sourcenode_leaf_routing_map) do
-        source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node") 
+        source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node")
         leaf_list = Map.get(sourcenode_leaf_routing_map, "leaf")
-        rout_dict = Map.get(sourcenode_leaf_routing_map, "routing") 
+        rout_dict = Map.get(sourcenode_leaf_routing_map, "routing")
         insert_leaf(pid, source_node_tuple)
         if length(leaf_list) != nil do
             Enum.map(leaf_list, fn x -> insert_leaf(pid, x) end)
@@ -162,18 +162,18 @@ defmodule Pastry.Table do
             # leaf set is not full, directly insert into leaf set
             side_leaf_set = [node_tuple] ++ side_leaf_set
             # sorting according to the node_id_int
-            side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))  
+            side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))
             leaf_set = Map.update!(leaf_set, leaf_flag, fn x -> side_leaf_set end)
             state = Map.update!(state, "leaf", fn x -> leaf_set end)
         else
             # the leaf set is full
-            [num_routing_row, num_routing_col] = Map.get(state, "routing_size") 
+            [num_routing_row, num_routing_col] = Map.get(state, "routing_size")
             routing_dict = Map.get(state, "routing")
             pop_node_tuple = nil
             if elem(List.first(side_leaf_set), 1) < node_id_int && node_id_int < elem(List.last(side_leaf_set), 1) do
                 # node_id is within range of side leaf set
                 side_leaf_set = [node_tuple] ++ side_leaf_set
-                side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1))) 
+                side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))
                 case leaf_flag do
                     "small" ->
                         {pop_node_tuple, side_leaf_set} = List.pop_at(side_leaf_set, 0)
@@ -189,7 +189,7 @@ defmodule Pastry.Table do
                 # node_id is not within range of side leaf set
                 routing_dict = Pastry.Table.insert_routing(pop_node_tuple, routing_dict)
             end
-            state = Map.update(state, "routing", fn x -> routing_dict end)
+            state = Map.update!(state, "routing", fn x -> routing_dict end)
         end
         {:noreply, state}
     end
@@ -201,8 +201,8 @@ defmodule Pastry.Table do
         diff = length(neighbor_list) - neighbor_size
         if diff > 0 do
             Pastry.Utilies.pop_list(neighbor_list, diff)
-        end     
-        state = Map.update(state, "neighbor", fn x -> neighbor_list end)
+        end
+        state = Map.update!(state, "neighbor", fn x -> neighbor_list end)
         {:noreply, state}
     end
 
@@ -210,7 +210,7 @@ defmodule Pastry.Table do
         leaf_map = Map.get(state, "leaf")
         target_node_int = Pastry.Utilies.id_to_number(target_node_str, Map.get(state, "arg_b"))
         self_node_id_int = Map.get(state, "node_id_int")
-        matched_dest = 
+        matched_dest =
             case target_node_int < self_node_id_int do
                 true ->
                     check_same_pattern(Map.get(leaf_map, "small"), target_node_str)
@@ -224,7 +224,7 @@ defmodule Pastry.Table do
         if length(tuple_list) > 0 do
             {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
             case elem(first_tuple, 0) == target_node_str do
-                true -> 
+                true ->
                     first_tuple
                 false ->
                     check_same_pattern(rest_tuple_list, target_node_str)
@@ -252,7 +252,7 @@ defmodule Pastry.Table do
 
     def handle_call({:get_next_from_all, target_node_str, common_length}, _from, state) do
         all_list = Map.values(Map.get(state, "leaf")) ++ Map.values(Map.get(state, "routing")) ++ Map.get(state, "neighbor")
-        target_node_int = Pastry.Utilies.id_to_number(target_node_str, Map.get(state, "arg_b"))      
+        target_node_int = Pastry.Utilies.id_to_number(target_node_str, Map.get(state, "arg_b"))
         self_node_int = Map.get(state, "self_node_int")
         matched_dest = find_closest_in_all(all_list, self_node_int, target_node_str, target_node_int, common_length)
         {:reply, matched_dest}
@@ -278,7 +278,7 @@ defmodule Pastry.Table do
     def handle_call({:get_self_table}, _from, state) do
         self_node_str = Map.get(state, "node_id_str")
         self_node_int = Map.get(state, "node_id_int")
-        self_node_pid = Map.get(state, "node_pid")
+        self_node_pid = Map.get(state, "self_node_pid")
         self_node_map = %{"source_node" => {self_node_str, self_node_int, self_node_pid}}
         fetch_keys = ["leaf", "routing", "neighbor"]
         msg = Map.take(state, fetch_keys)
@@ -286,7 +286,7 @@ defmodule Pastry.Table do
         {:reply, msg, state}
     end
 
-    def handle_call({:get_recv_counter}, _from, state) do      
+    def handle_call({:get_recv_counter}, _from, state) do
         {:reply, Map.get(state, "recv_counter"), state}
     end
 
