@@ -115,13 +115,13 @@ defmodule Pastry.Table do
         {:ok, state}
     end
 
-    defp insert_routing(insert_node_tuple, self_node_id_str, routing_dict, num_routing_col) do
+    def insert_routing(insert_node_tuple, self_node_id_str, routing_dict, num_routing_col) do
         insert_node_id_str = elem(insert_node_tuple, 0)
         length_shared_prefix = Pastry.Utilies.shl(self_node_id_str, insert_node_id_str, 0)
 
         {common_prefix, rest} = String.split_at(insert_node_id_str, length_shared_prefix)
         {next_digit, rest} = String.split_at(rest, 1)
-        next_digit = Integer.parse(next_digit)
+        {next_digit, _} = Integer.parse(next_digit)
 
         case Map.has_key?(routing_dict, length_shared_prefix) do
             true ->
@@ -133,7 +133,8 @@ defmodule Pastry.Table do
                     poped_routing_tuple = target_routing_col
                     # TODO: insert the poped_routing_item into neighbor set
                 end
-                new_row = List.replace_at(target_routing_row, next_digit, node_id_tuple)
+                IO.puts "+++Next digit: #{inspect(next_digit)}"
+                new_row = List.replace_at(target_routing_row, next_digit, insert_node_tuple)
             false ->
                 # Create a new row in the routing map with length_shared_prefix as key
                 new_row = Enum.flat_map(1..num_routing_col, fn x -> [nil] end)
