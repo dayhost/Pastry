@@ -31,15 +31,18 @@ defmodule Pastry.Table do
     """
     def update_leaf(pid, sourcenode_leaf_routing_map) do
         source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node")
-        leaf_list = Map.get(sourcenode_leaf_routing_map, "leaf")
+        leaf_map = Map.get(sourcenode_leaf_routing_map, "leaf")
         rout_dict = Map.get(sourcenode_leaf_routing_map, "routing")
         insert_leaf(pid, source_node_tuple)
-        if length(leaf_list) != nil do
+        
+        leaf_list = Pastry.Utilies.flat_nested_dict(leaf_map)
+        IO.puts "leaf_list: #{inspect(leaf_list)}"
+        if length(leaf_list) != 0 do
             Enum.map(leaf_list, fn x -> insert_leaf(pid, x) end)
         end
 
         rout_list = Map.values(rout_dict)
-        if length(rout_list) != nil do
+        if length(rout_list) != 0 do
             Enum.map(rout_list, fn x -> insert_leaf(pid, x) end)
         end
     end
@@ -87,8 +90,8 @@ defmodule Pastry.Table do
         GenServer.call(pid, {:get_recv_counter})
     end
 
-    def set_send_counter(pid, send_num) do
-        GenServer.cast(pid, {:set_send_counter, send_num})
+    def add_send_counter(pid) do
+        GenServer.cast(pid, {:add_send_counter})
     end
 
     def get_time_stamp(pid) do
@@ -145,7 +148,8 @@ defmodule Pastry.Table do
     end
 
     def handle_cast({:insert_leaf, node_tuple}, state) do
-        [node_id_str, node_id_int, node_pid] = node_tuple
+        IO.puts inspect(node_tuple)
+        {node_id_str, node_id_int, node_pid} = node_tuple
         self_node_id_str = Map.get(state, "node_id_str")
         self_node_id_int = Map.get(state, "node_id_int")
         leaf_set = Map.get(state, "leaf")
@@ -251,19 +255,22 @@ defmodule Pastry.Table do
     end
 
     def handle_call({:get_next_from_all, target_node_str, common_length}, _from, state) do
-        all_list = Map.values(Map.get(state, "leaf")) ++ Map.values(Map.get(state, "routing")) ++ Map.get(state, "neighbor")
+        all_list = Pastry.Utilies.flat_nested_dict(Map.get(state, "leaf"))
+        all_list = all_list ++ Pastry.Utilies.flat_nested_dict(Map.get(state, "routing"))
+        all_list = all_list ++ Map.get(state, "neighbor")
+        IO.puts "all_list: #{inspect(all_list)}"
         target_node_int = Pastry.Utilies.id_to_number(target_node_str, Map.get(state, "arg_b"))
-        self_node_int = Map.get(state, "self_node_int")
+        self_node_int = Map.get(state, "node_id_int")
         matched_dest = find_closest_in_all(all_list, self_node_int, target_node_str, target_node_int, common_length)
-        {:reply, matched_dest}
+        {:reply, matched_dest, state}
     end
 
     def find_closest_in_all(tuple_list, self_node_int, target_node_str, target_node_int, common_length) do
-        IO.puts "yes"
         if length(tuple_list) > 1 do
             {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
             common_length_td = Pastry.Utilies.shl(elem(first_tuple, 0), target_node_str, 0)
             dist_td = abs(elem(first_tuple, 1) - target_node_int)
+            IO.puts "find_closest: #{inspect(self_node_int)}"
             dist_ad = abs(self_node_int - target_node_int)
             if common_length_td >= common_length && dist_td < dist_ad do
                 first_tuple
@@ -303,8 +310,8 @@ defmodule Pastry.Table do
         {:noreply, state}
     end
 
-    def handle_cast({:set_send_counter, send_num}, state) do
-        state = Map.update!(state, "send_counter", &(&1=send_num))
+    def handle_cast({:add_send_counter}, state) do
+        state = Map.update!(state, "send_counter", &(&1+1))
         {:noreply, state}
     end
 

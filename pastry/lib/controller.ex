@@ -22,11 +22,11 @@ defmodule Pastry.Controller do
         node_tuple = Pastry.ControllerStatus.get_random_node(node_status)
         if node_tuple != nil do
             if Process.alive?(elem(node_tuple,2))==false do
-                Pastry.ControllerStatus.remove_node(node_tuple)
+                Pastry.ControllerStatus.remove_node(node_status, node_tuple)
             else
                 destID = :random.uniform(max_node_num)
                 destID = Pastry.Utilies.get_node_id(destID, arg_b)
-                send(elem(node_tuple,2), {:normal, {destID, "hello", -1}})
+                send(elem(node_tuple,2), {:normal, {destID, "hello", 0}})
                 Pastry.ControllerStatus.add_msg_counter(node_status)
             end
             random_send_msg(node_status, max_node_num, arg_b)
@@ -107,7 +107,8 @@ defmodule Pastry.ControllerStatus do
 
     def handle_call({:get_avg_hop}, _from, status) do
         total_msg = Map.get(status, "total_msg")
-        total_hop = Map.get(status, "total_jop")
+        total_hop = Map.get(status, "total_hop")
+        IO.puts "#{total_msg}, #{total_hop}"
         {:reply, total_hop/total_msg, status}
     end
 end

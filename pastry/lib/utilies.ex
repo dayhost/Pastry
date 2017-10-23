@@ -41,8 +41,8 @@ defmodule Pastry.Utilies do
         end 
     end
 
-    def flat_routing_table(routing_dict) do
-        routing_list = Map.values(routing_dict)
+    def flat_nested_dict(nested_dict) do
+        routing_list = Map.values(nested_dict)
         Enum.flat_map(routing_list, fn x -> x end)
     end
 
