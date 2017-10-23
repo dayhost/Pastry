@@ -128,6 +128,7 @@ defmodule Pastry.Node do
         leaf_list = Pastry.Utilies.flat_nested_dict(Map.get(self_table, "leaf"))
         neighbor_list = Map.get(self_table, "neighbor")
         total_list = routing_list ++ leaf_list ++ neighbor_list
+        total_list = Enum.uniq(total_list)
         send_table_list(total_list, self_table)
         #end
     end

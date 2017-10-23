@@ -149,7 +149,7 @@ defmodule Pastry.Table do
     end
 
     def handle_cast({:insert_leaf, node_tuple}, state) do
-        IO.puts inspect(node_tuple)
+        # IO.puts inspect(node_tuple)
         {node_id_str, node_id_int, node_pid} = node_tuple
         self_node_id_str = Map.get(state, "node_id_str")
         self_node_id_int = Map.get(state, "node_id_int")
@@ -163,39 +163,50 @@ defmodule Pastry.Table do
         end
 
         side_leaf_set = Map.get(leaf_set, leaf_flag)
-        if length(side_leaf_set) < Map.get(state, "leaf_size") / 2 do
-            # leaf set is not full, directly insert into leaf set
-            side_leaf_set = [node_tuple] ++ side_leaf_set
-            # sorting according to the node_id_int
-            side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))
-            leaf_set = Map.update!(leaf_set, leaf_flag, fn x -> side_leaf_set end)
-            state = Map.update!(state, "leaf", fn x -> leaf_set end)
-        else
-            # the leaf set is full
-            [num_routing_row, num_routing_col] = Map.get(state, "routing_size")
-            routing_dict = Map.get(state, "routing")
-            if elem(List.first(side_leaf_set), 1) < node_id_int && node_id_int < elem(List.last(side_leaf_set), 1) do
-                # node_id is within range of side leaf set
-                pop_node_tuple = nil
-                side_leaf_set = [node_tuple] ++ side_leaf_set
-                side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))
-                case leaf_flag do
-                    "small" ->
-                        {pop_node_tuple, side_leaf_set} = List.pop_at(side_leaf_set, 0)
-                    "large" ->
-                        {pop_node_tuple, side_leaf_set} = List.pop_at(side_leaf_set, -1)
-                end
-                leaf_set = Map.update!(leaf_set, leaf_flag, fn x -> side_leaf_set end)
-                state = Map.update!(state, "leaf", fn x -> leaf_set end)
-                # insert the pop_value into the routing table
+        case Enum.member?(side_leaf_set, node_tuple) do
+             true ->
+                # Already exists, insert the routing table
                 self_node_str = Map.get(state, "node_id_str")
-                routing_dict = Pastry.Table.insert_routing(pop_node_tuple, self_node_str, routing_dict, num_routing_col)
-            else
-                # node_id is not within range of side leaf set
-                self_node_str = Map.get(state, "node_id_str")
+                [num_routing_row, num_routing_col] = Map.get(state, "routing_size")
+                routing_dict = Map.get(state, "routing")
                 routing_dict = Pastry.Table.insert_routing(node_tuple, self_node_str, routing_dict, num_routing_col)
-            end
-            state = Map.update!(state, "routing", fn x -> routing_dict end)
+                state = Map.update!(state, "routing", fn x -> routing_dict end)
+            false ->
+                # Leaf set does not have the insert node
+                if length(side_leaf_set) < Map.get(state, "leaf_size") / 2 do
+                    # leaf set is not full, directly insert into leaf set
+                    side_leaf_set = [node_tuple] ++ side_leaf_set
+                    # sorting according to the node_id_int
+                    side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))
+                    leaf_set = Map.update!(leaf_set, leaf_flag, fn x -> side_leaf_set end)
+                    state = Map.update!(state, "leaf", fn x -> leaf_set end)
+                else
+                    # the leaf set is full
+                    [num_routing_row, num_routing_col] = Map.get(state, "routing_size")
+                    routing_dict = Map.get(state, "routing")
+                    if elem(List.first(side_leaf_set), 1) < node_id_int && node_id_int < elem(List.last(side_leaf_set), 1) do
+                        # node_id is within range of side leaf set
+                        pop_node_tuple = nil
+                        side_leaf_set = [node_tuple] ++ side_leaf_set
+                        side_leaf_set = Enum.sort(side_leaf_set, &(elem(&1, 1) < elem(&2, 1)))
+                        case leaf_flag do
+                            "small" ->
+                                {pop_node_tuple, side_leaf_set} = List.pop_at(side_leaf_set, 0)
+                            "large" ->
+                                {pop_node_tuple, side_leaf_set} = List.pop_at(side_leaf_set, -1)
+                        end
+                        leaf_set = Map.update!(leaf_set, leaf_flag, fn x -> side_leaf_set end)
+                        state = Map.update!(state, "leaf", fn x -> leaf_set end)
+                        # insert the pop_value into the routing table
+                        self_node_str = Map.get(state, "node_id_str")
+                        routing_dict = Pastry.Table.insert_routing(pop_node_tuple, self_node_str, routing_dict, num_routing_col)
+                    else
+                        # node_id is not within range of side leaf set
+                        self_node_str = Map.get(state, "node_id_str")
+                        routing_dict = Pastry.Table.insert_routing(node_tuple, self_node_str, routing_dict, num_routing_col)
+                    end
+                    state = Map.update!(state, "routing", fn x -> routing_dict end)
+                end
         end
         {:noreply, state}
     end
@@ -204,6 +215,7 @@ defmodule Pastry.Table do
         neighbor_list = Map.get(state, "neighbor")
         neighbor_size = Map.get(state, "neighbor_size")
         neighbor_list = neighbor_list ++ insert_neighbor_list
+        neighbor_list = Enum.uniq(neighbor_list)
         diff = length(neighbor_list) - neighbor_size
         if diff > 0 do
             Pastry.Utilies.pop_list(neighbor_list, diff)
@@ -219,25 +231,47 @@ defmodule Pastry.Table do
         matched_dest =
             case target_node_int < self_node_id_int do
                 true ->
-                    check_same_pattern(Map.get(leaf_map, "small"), target_node_str)
+                    # Search in the small leaf
+                    small_leaf_list = Map.get(leaf_map, "small")
+                    lower_bound_tuple = Enum.at(small_leaf_list, 0)
+                    case target_node_int < elem(lower_bound_tuple, 1) do
+                        true ->
+                            nil
+                        false ->
+                            Pastry.Table.find_closest_pattern(small_leaf_list, target_node_int)
+                    end
                 false ->
-                    check_same_pattern(Map.get(leaf_map, "large"), target_node_str)
+                    # Search in the large leaf
+                    large_leaf_list = Map.get(leaf_map, "large")
+                    upper_bound_tuple = Enum.at(large_leaf_list, -1)
+                    case target_node_int > elem(upper_bound_tuple, 1) do
+                        true ->
+                            nil
+                        false ->
+                            Pastry.Table.find_closest_pattern(large_leaf_list, target_node_int)
+                    end
             end
         {:reply, matched_dest, state}
     end
 
-    def check_same_pattern(tuple_list, target_node_str) do
-        if length(tuple_list) > 0 do
-            {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
-            case elem(first_tuple, 0) == target_node_str do
-                true ->
-                    first_tuple
-                false ->
-                    check_same_pattern(rest_tuple_list, target_node_str)
-            end
-        else
-            nil
-        end
+    def compare_tuple(input_node_tuple, base_node_int) do
+        input_node_int = elem(input_node_tuple, 1)
+        abs(input_node_int - base_node_int)
+    end
+
+    def find_closest_pattern(tuple_list, target_node_int) do
+        Enum.min_by(tuple_list, fn (x) -> Pastry.Table.compare_tuple(x, target_node_int) end)
+        # if length(tuple_list) > 0 do
+        #     {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
+        #     case elem(first_tuple, 0) == target_node_str do
+        #         true ->
+        #             first_tuple
+        #         false ->
+        #             check_same_pattern(rest_tuple_list, target_node_str)
+        #     end
+        # else
+        #     nil
+        # end
     end
 
     def handle_call({:get_next_from_routing, target_node_str, common_length}, _from, state) do
