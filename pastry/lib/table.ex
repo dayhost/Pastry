@@ -29,10 +29,10 @@ defmodule Pastry.Table do
     Update the leaf set and routing in the current table
     : sourcenode_leaf_routing_map (map)
     """
-    def update_leaf(pid, sourcenode_leaf_map) do
-        source_node_tuple = Map.get(sourcenode_leaf_map, "source_node")
-        leaf_map = Map.get(sourcenode_leaf_map, "leaf")
-        
+    def update_leaf(pid, sourcenode_leaf_routing_map) do
+        source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node")
+        leaf_map = Map.get(sourcenode_leaf_routing_map, "leaf")
+        rout_map = Map.get(sourcenode_leaf_routing_map, "routing")
         insert_leaf(pid, source_node_tuple)
         
         leaf_list = Pastry.Utilies.flat_nested_dict(leaf_map)
@@ -48,10 +48,6 @@ defmodule Pastry.Table do
             IO.puts "rout_list: #{inspect(rout_list)}"
             Enum.map(rout_list, fn x -> insert_leaf(pid, x) end)
         end
-    end
-
-    def update_routing(pid, routing_map, hop) do
-        GenServer.cast(pid, {:update_routing, routing_map, hop})        
     end
 
     @doc """
@@ -85,6 +81,29 @@ defmodule Pastry.Table do
         GenServer.call(pid, {:get_self_table})
     end
 
+    def get_send_counter(pid) do
+        GenServer.call(pid, {:get_send_counter})
+    end
+
+    def set_recv_counter(pid, recv_num) do
+        GenServer.cast(pid, {:set_recv_counter, recv_num})
+    end
+
+    def get_recv_counter(pid) do
+        GenServer.call(pid, {:get_recv_counter})
+    end
+
+    def add_send_counter(pid) do
+        GenServer.cast(pid, {:add_send_counter})
+    end
+
+    def get_time_stamp(pid) do
+        GenServer.call(pid, {:get_time_stamp})
+    end
+
+    def set_time_stamp(pid, time_stamp) do
+        GenServer.cast(pid, {:set_time_stamp, time_stamp})
+    end
 
     ## Server Callbacks
     def init([:ok, node_id_str, node_id_int, self_node_pid, b]) do
@@ -198,10 +217,6 @@ defmodule Pastry.Table do
         {:noreply, state}
     end
 
-    def handle_cast({:update_routing, routing_map, hop}, state) do
-        routing_map = Map.get(routing_map, "routing")
-    end
-
     def handle_cast({:insert_neighbor, insert_neighbor_list}, state) do
         neighbor_list = Map.get(state, "neighbor")
         neighbor_size = Map.get(state, "neighbor_size")
@@ -307,30 +322,6 @@ defmodule Pastry.Table do
         msg = Map.take(state, fetch_keys)
         msg = Map.merge(msg,self_node_map)
         {:reply, msg, state}
-    end
-
-    def get_send_counter(pid) do
-        GenServer.call(pid, {:get_send_counter})
-    end
-
-    def set_recv_counter(pid, recv_num) do
-        GenServer.cast(pid, {:set_recv_counter, recv_num})
-    end
-
-    def get_recv_counter(pid) do
-        GenServer.call(pid, {:get_recv_counter})
-    end
-
-    def add_send_counter(pid) do
-        GenServer.cast(pid, {:add_send_counter})
-    end
-
-    def get_time_stamp(pid) do
-        GenServer.call(pid, {:get_time_stamp})
-    end
-
-    def set_time_stamp(pid, time_stamp) do
-        GenServer.cast(pid, {:set_time_stamp, time_stamp})
     end
 
     def handle_call({:get_recv_counter}, _from, state) do
