@@ -1,19 +1,20 @@
 defmodule Pastry.Controller do
     def start_nodes(max_node_num, send_count) do
         {:ok, node_status} = Pastry.ControllerStatus.start_link()
-        arg_b = 4
+        arg_b = 2
         Enum.map(
             1..max_node_num,
             fn(x) ->
                 prox_node_tuple = Pastry.ControllerStatus.get_random_prox_node(node_status)
                 self_id = Pastry.Utilies.get_node_id(x, arg_b)
+                IO.puts "self id is #{self_id}"
                 pid = spawn_link(fn -> Pastry.Node.init(prox_node_tuple, x, self_id, arg_b, send_count, node_status) end)
                 self_node_tuple = {self_id, x, pid}
                 Pastry.ControllerStatus.add_node(node_status, self_node_tuple)
                 :timer.sleep(1000)
             end
         )
-        :timer.sleep(5000)
+        :timer.sleep(25000)
         random_send_msg(node_status, max_node_num, arg_b)
     end
 

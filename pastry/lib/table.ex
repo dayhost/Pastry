@@ -30,6 +30,7 @@ defmodule Pastry.Table do
     : sourcenode_leaf_routing_map (map)
     """
     def update_leaf(pid, sourcenode_leaf_routing_map, self_node_id_str) do
+        s_t = System.os_time(:millisecond)
         source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node")
         leaf_map = Map.get(sourcenode_leaf_routing_map, "leaf")
         rout_map = Map.get(sourcenode_leaf_routing_map, "routing")
@@ -50,8 +51,14 @@ defmodule Pastry.Table do
         if length(rout_list) != 0 do
             rout_list = List.delete(Enum.uniq(rout_list), nil)
             # IO.puts "rout_list: #{inspect(rout_list)}"
-            Enum.map(rout_list, fn x -> insert_leaf(pid, x) end)
+            Enum.map(rout_list, fn x -> 
+                if elem(x, 0) != self_node_id_str do
+                    insert_leaf(pid, x)
+                end 
+            end)
         end
+        e_t = System.os_time(:millisecond)
+        IO.puts "#{inspect(self())} insert leaf used #{(e_t-s_t)/1000}, leaf list size is #{length(leaf_list)+length(rout_list)}"
     end
 
     @doc """
@@ -59,10 +66,13 @@ defmodule Pastry.Table do
     : neighbor_map (map)
     """
     def update_neighbor(pid, neighbor_map) do
+        s_t = System.os_time(:millisecond)
         insert_neighbor_list = Map.get(neighbor_map, "neighbor")
         if length(insert_neighbor_list) != nil do
             Pastry.Table.insert_neighbor(pid, insert_neighbor_list)
         end
+        e_t = System.os_time(:millisecond)
+        IO.puts "#{inspect(self())} insert neighbor used #{(e_t-s_t)}/1000 and neighbor size is #{length(insert_neighbor_list)}"
     end
 
     def get_self_node_str(pid) do
@@ -112,7 +122,7 @@ defmodule Pastry.Table do
     ## Server Callbacks
     def init([:ok, node_id_str, node_id_int, self_node_pid, b]) do
         tmp = :math.pow(2, b) |> round
-        l = 2 #tmp
+        l = tmp
         m = 2 * tmp
         num_routing_col = tmp
         num_routing_row = l # :math.log(num_nodes) / :math.log(tmp)
@@ -159,6 +169,7 @@ defmodule Pastry.Table do
 
     def handle_cast({:insert_leaf, node_tuple}, state) do
         # IO.puts "Node_tuple: #{inspect(node_tuple)}"
+        s_t = System.os_time(:millisecond)
         {node_id_str, node_id_int, node_pid} = node_tuple
         self_node_id_str = Map.get(state, "node_id_str")
         self_node_id_int = Map.get(state, "node_id_int")
@@ -218,10 +229,13 @@ defmodule Pastry.Table do
                     state = Map.update!(state, "routing", fn x -> routing_dict end)
                 end
         end
+        e_t = System.os_time(:millisecond)
+        IO.puts "#{inspect(self())} insert one single leaf used #{(e_t-s_t)/1000}"
         {:noreply, state}
     end
 
     def handle_cast({:insert_neighbor, insert_neighbor_list}, state) do
+        s_t = System.os_time(:millisecond)
         neighbor_list = Map.get(state, "neighbor")
         neighbor_size = Map.get(state, "neighbor_size")
         neighbor_list = neighbor_list ++ insert_neighbor_list
@@ -238,6 +252,8 @@ defmodule Pastry.Table do
             Pastry.Utilies.pop_list(neighbor_list, diff)
         end
         state = Map.update!(state, "neighbor", fn x -> neighbor_list end)
+        e_t = System.os_time(:millisecond)
+        IO.puts "#{inspect(self())} insert one single neighbor used #{(e_t-s_t)/1000}"
         {:noreply, state}
     end
 
