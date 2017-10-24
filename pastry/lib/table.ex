@@ -29,23 +29,27 @@ defmodule Pastry.Table do
     Update the leaf set and routing in the current table
     : sourcenode_leaf_routing_map (map)
     """
-    def update_leaf(pid, sourcenode_leaf_routing_map) do
+    def update_leaf(pid, sourcenode_leaf_routing_map, self_node_id_str) do
         source_node_tuple = Map.get(sourcenode_leaf_routing_map, "source_node")
         leaf_map = Map.get(sourcenode_leaf_routing_map, "leaf")
         rout_map = Map.get(sourcenode_leaf_routing_map, "routing")
         insert_leaf(pid, source_node_tuple)
         
         leaf_list = Pastry.Utilies.flat_nested_dict(leaf_map)
-        IO.puts "leaf_list: #{inspect(leaf_list)}"
+        # IO.puts "leaf_list: #{inspect(leaf_list)}"
         if length(leaf_list) != 0 do
-            Enum.map(leaf_list, fn x -> insert_leaf(pid, x) end)
+            Enum.map(leaf_list, fn x -> 
+                if elem(x, 0) != self_node_id_str do
+                    insert_leaf(pid, x)
+                end 
+            end)
         end
         
         rout_list = Pastry.Utilies.flat_nested_dict(rout_map)
-        IO.puts "++++++++++#{inspect(rout_list)}"
+        # IO.puts "++++++++++#{inspect(rout_list)}"
         if length(rout_list) != 0 do
             rout_list = List.delete(Enum.uniq(rout_list), nil)
-            IO.puts "rout_list: #{inspect(rout_list)}"
+            # IO.puts "rout_list: #{inspect(rout_list)}"
             Enum.map(rout_list, fn x -> insert_leaf(pid, x) end)
         end
     end
@@ -136,7 +140,7 @@ defmodule Pastry.Table do
                         poped_routing_tuple = target_routing_col
                         # TODO: insert the poped_routing_item into neighbor set
                     end
-                    IO.puts "+++Next digit: #{inspect(next_digit)}"
+                    # IO.puts "+++Next digit: #{inspect(next_digit)}"
                     new_row = List.replace_at(target_routing_row, next_digit, insert_node_tuple)
                     Map.update(routing_dict, length_shared_prefix, new_row, &(&1=new_row))
                 false ->
@@ -154,7 +158,7 @@ defmodule Pastry.Table do
     end
 
     def handle_cast({:insert_leaf, node_tuple}, state) do
-        IO.puts "Node_tuple: #{inspect(node_tuple)}"
+        # IO.puts "Node_tuple: #{inspect(node_tuple)}"
         {node_id_str, node_id_int, node_pid} = node_tuple
         self_node_id_str = Map.get(state, "node_id_str")
         self_node_id_int = Map.get(state, "node_id_int")
@@ -222,6 +226,13 @@ defmodule Pastry.Table do
         neighbor_size = Map.get(state, "neighbor_size")
         neighbor_list = neighbor_list ++ insert_neighbor_list
         neighbor_list = Enum.uniq(neighbor_list)
+        
+        self_node_str = Map.get(state, "node_id_str")
+        self_node_int = Map.get(state, "node_id_int")
+        self_node_pid = Map.get(state, "self_node_pid")
+        self_node_tuple = {self_node_str, self_node_int, self_node_pid}
+        
+        neighbor_list = List.delete(neighbor_list, self_node_tuple)
         diff = length(neighbor_list) - neighbor_size
         if diff > 0 do
             Pastry.Utilies.pop_list(neighbor_list, diff)
@@ -240,7 +251,7 @@ defmodule Pastry.Table do
                     # Search in the small leaf
                     small_leaf_list = Map.get(leaf_map, "small")
                     lower_bound_tuple = Enum.at(small_leaf_list, 0)
-                    case target_node_int < elem(lower_bound_tuple, 1) do
+                    case is_nil(lower_bound_tuple) || target_node_int < elem(lower_bound_tuple, 1) do
                         true ->
                             nil
                         false ->
@@ -250,7 +261,7 @@ defmodule Pastry.Table do
                     # Search in the large leaf
                     large_leaf_list = Map.get(leaf_map, "large")
                     upper_bound_tuple = Enum.at(large_leaf_list, -1)
-                    case target_node_int > elem(upper_bound_tuple, 1) do
+                    case is_nil(upper_bound_tuple) ||target_node_int > elem(upper_bound_tuple, 1) do
                         true ->
                             nil
                         false ->
@@ -271,7 +282,7 @@ defmodule Pastry.Table do
 
     def handle_call({:get_next_from_routing, target_node_str, common_length}, _from, state) do
         routing_map = Map.get(state, "routing")
-        IO.puts inspect(routing_map)
+        # IO.puts inspect(routing_map)
         case Map.has_key?(routing_map, common_length) do
             true ->
                 routing_row = Map.get(routing_map, common_length)
@@ -289,7 +300,9 @@ defmodule Pastry.Table do
         all_list = Pastry.Utilies.flat_nested_dict(Map.get(state, "leaf"))
         all_list = all_list ++ Pastry.Utilies.flat_nested_dict(Map.get(state, "routing"))
         all_list = all_list ++ Map.get(state, "neighbor")
-        IO.puts "all_list: #{inspect(all_list)}"
+        all_list = Enum.uniq(all_list)
+        all_list = List.delete(all_list, nil)
+        # IO.puts "all_list: #{inspect(all_list)}"
         target_node_int = Pastry.Utilies.id_to_number(target_node_str, Map.get(state, "arg_b"))
         self_node_int = Map.get(state, "node_id_int")
         matched_dest = find_closest_in_all(all_list, self_node_int, target_node_str, target_node_int, common_length)
@@ -297,11 +310,12 @@ defmodule Pastry.Table do
     end
 
     def find_closest_in_all(tuple_list, self_node_int, target_node_str, target_node_int, common_length) do
+        # IO.puts "#{inspect(tuple_list)} \n #{inspect(self_node_int)} \n"
         if length(tuple_list) > 1 do
             {first_tuple, rest_tuple_list} = List.pop_at(tuple_list, 0)
             common_length_td = Pastry.Utilies.shl(elem(first_tuple, 0), target_node_str, 0)
             dist_td = abs(elem(first_tuple, 1) - target_node_int)
-            IO.puts "find_closest: #{inspect(self_node_int)}"
+            # IO.puts "find_closest: #{inspect(self_node_int)}"
             dist_ad = abs(self_node_int - target_node_int)
             if common_length_td >= common_length && dist_td < dist_ad do
                 first_tuple
