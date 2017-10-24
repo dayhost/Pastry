@@ -2,7 +2,7 @@ defmodule Pastry.Node do
     def init(prox_node_tuple, node_num, self_id, arg_b, send_num, msg_aggr_server) do
         # create its own db
         {:ok, server_pid} = Pastry.Table.start_link(self_id, node_num, self(), arg_b)
-        IO.puts "get an empty node and start to init and prox is #{inspect(prox_node_tuple)}"
+        #IO.puts "get an empty node and start to init and prox is #{inspect(prox_node_tuple)}"
         # start to get routing info
         # send start to send init info
         if (prox_node_tuple==nil) do
@@ -11,7 +11,7 @@ defmodule Pastry.Node do
         else
             Pastry.Table.update_neighbor(server_pid, %{"neighbor" => [prox_node_tuple]})
             send(Kernel.elem(prox_node_tuple, 2), {:init, {self_id, self(), 1}})
-            IO.puts "new node #{inspect(self())} send init message to #{inspect(prox_node_tuple)}"
+            #IO.puts "new node #{inspect(self())} send init message to #{inspect(prox_node_tuple)}"
             #start to recieve table from nodes
             receive_data(server_pid, arg_b, send_num, msg_aggr_server)
         end
@@ -26,15 +26,15 @@ defmodule Pastry.Node do
                 self_id = get_self_node_str(server_pid)
                 self_table = get_self_table(server_pid)
                 node_id_int = Pastry.Utilies.id_to_number(destID, arg_b)
-                IO.puts "#{inspect(self())} get :init message from #{inspect(new_node_pid)}"
+                #IO.puts "#{inspect(self())} get :init message from #{inspect(new_node_pid)}"
                 if (Pastry.Utilies.node_id_diff(self_id, destID, arg_b)<2) do
                     IO.puts ":init message get the destination from #{inspect(new_node_pid)} to #{inspect(self())}"
                 else
                     next_node_address = route_logic(destID, server_pid, self_id)
-                    IO.puts "#{inspect(self())} Next node #{inspect(next_node_address)}"
+                    #IO.puts "#{inspect(self())} Next node #{inspect(next_node_address)}"
                     send(elem(next_node_address, 2), {:init, {destID, new_node_pid, hop_num+1}})
                 end
-                
+
                 if hop_num == 1 do
                     #IO.puts "#{inspect(self())} gets init msg from #{inspect(new_node_pid)}  "
                     Pastry.Table.update_neighbor(server_pid,%{"neighbor"=>[{destID, node_id_int, new_node_pid}]})
@@ -42,13 +42,12 @@ defmodule Pastry.Node do
                 else
                     Pastry.Table.insert_leaf(server_pid, {destID, node_id_int, new_node_pid})
                 end
-                
-                IO.puts "\n#{inspect(self())}: #{inspect(Pastry.Table.get_self_table(server_pid))}========"
+                #IO.puts "\n#{inspect(self())}: #{inspect(Pastry.Table.get_self_table(server_pid))}========"
                 send(new_node_pid, {:update, {self_table, self_id, hop_num}})
             {:update, {new_table, sourceID, hop_num}} ->
                 # get update table from old node
                 # message {:update, {%{table}, sourceID, hop_num}}
-                IO.puts "#{inspect(self())} get update information from #{sourceID}"
+                #IO.puts "#{inspect(self())} get update information from #{sourceID}"
                 self_id = get_self_node_str(server_pid)
                 update_leaf(server_pid, new_table, self_id)
                 if hop_num == 1 do
@@ -57,14 +56,14 @@ defmodule Pastry.Node do
                 # this will triggle with condition
                 #send_table_to_all_neighbor(server_pid, arg_b)
                 set_timer_for_send(server_pid, arg_b)
-                IO.puts "#{inspect(self())} finish update"
+                #IO.puts "#{inspect(self())} finish update"
             {:join, {new_table}} ->
                 # update its table
-                IO.puts "#{inspect(self())} get join information"
+                #IO.puts "#{inspect(self())} get join information"
                 self_id = get_self_node_str(server_pid)
                 update_leaf(server_pid, new_table, self_id)
                 update_neighbor(server_pid, new_table)
-                IO.puts "#{inspect(self())} finish state is #{inspect(get_self_table(server_pid))}"
+                #IO.puts "#{inspect(self())} finish state is #{inspect(get_self_table(server_pid))}"
             {:normal, {destID, msg, hop_num}} ->
                 # get normal(forward) message from other node
                 # check if it want to terminate
@@ -73,13 +72,13 @@ defmodule Pastry.Node do
                 if(send_count<send_num) do
                     self_id = get_self_node_str(server_pid)
                     if (self_id==destID) do
-                        IO.puts ":nromal message get the destination and hop num is #{hop_num}"
+                        #IO.puts ":nromal message get the destination and hop num is #{hop_num}"
                         # return num of hop used in send msg
                         Pastry.ControllerStatus.add_hop_counter(msg_aggr_server, hop_num)
                         Pastry.ControllerStatus.add_msg_counter(msg_aggr_server)
                     else
                         next_node_address = route_logic(destID, server_pid, self_id)
-                        IO.puts "next_node_address: #{inspect(next_node_address)}"
+                        #IO.puts "next_node_address: #{inspect(next_node_address)}"
                         send(elem(next_node_address, 2), {:normal, {destID, msg, hop_num+1}})
                         Pastry.Table.add_send_counter(server_pid)
                     end
@@ -128,7 +127,7 @@ defmodule Pastry.Node do
 
     def send_table_to_all_neighbor(server_pid, arg_b) do
         #if check_cretria(server_pid, arg_b) do
-        IO.puts "#{inspect(self())}+++++++++++send table to all neighbor"
+        #IO.puts "#{inspect(self())}+++++++++++send table to all neighbor"
         self_table = get_self_table(server_pid)
         routing_list = Pastry.Utilies.flat_nested_dict(Map.get(self_table, "routing"))
         leaf_list = Pastry.Utilies.flat_nested_dict(Map.get(self_table, "leaf"))

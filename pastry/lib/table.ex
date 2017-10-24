@@ -58,7 +58,7 @@ defmodule Pastry.Table do
             end)
         end
         e_t = System.os_time(:millisecond)
-        IO.puts "#{inspect(self())} insert leaf used #{(e_t-s_t)/1000}, leaf list size is #{length(leaf_list)+length(rout_list)}"
+        #IO.puts "#{inspect(self())} insert leaf used #{(e_t-s_t)/1000}, leaf list size is #{length(leaf_list)+length(rout_list)}"
     end
 
     @doc """
@@ -72,7 +72,7 @@ defmodule Pastry.Table do
             Pastry.Table.insert_neighbor(pid, insert_neighbor_list)
         end
         e_t = System.os_time(:millisecond)
-        IO.puts "#{inspect(self())} insert neighbor used #{(e_t-s_t)}/1000 and neighbor size is #{length(insert_neighbor_list)}"
+        #IO.puts "#{inspect(self())} insert neighbor used #{(e_t-s_t)}/1000 and neighbor size is #{length(insert_neighbor_list)}"
     end
 
     def get_self_node_str(pid) do
@@ -230,7 +230,7 @@ defmodule Pastry.Table do
                 end
         end
         e_t = System.os_time(:millisecond)
-        IO.puts "#{inspect(self())} insert one single leaf used #{(e_t-s_t)/1000}"
+        #IO.puts "#{inspect(self())} insert one single leaf used #{(e_t-s_t)/1000}"
         {:noreply, state}
     end
 
@@ -253,7 +253,7 @@ defmodule Pastry.Table do
         end
         state = Map.update!(state, "neighbor", fn x -> neighbor_list end)
         e_t = System.os_time(:millisecond)
-        IO.puts "#{inspect(self())} insert one single neighbor used #{(e_t-s_t)/1000}"
+        #IO.puts "#{inspect(self())} insert one single neighbor used #{(e_t-s_t)/1000}"
         {:noreply, state}
     end
 
